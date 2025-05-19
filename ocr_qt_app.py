@@ -2,6 +2,7 @@ import argparse
 import os
 import signal
 import sys
+import logging  # Aggiunto logging
 
 import cv2
 import numpy as np
@@ -14,6 +15,9 @@ from PyQt6.QtWidgets import (
 
 # Importa la funzione di elaborazione dell'immagine dal nuovo file
 from image_processor import warp_image
+
+# Configurazione del logger per questo modulo
+logger = logging.getLogger(__name__)
 
 
 class ImageLabel(QLabel):
@@ -132,7 +136,7 @@ class MainWindow(QMainWindow):
         self.image_dir = image_dir
         self.image_files = [f for f in os.listdir(image_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
         self.image_files.sort()
-        self.current_idx = 0 # Indice dell'immagine corrente
+        self.current_idx = 0  # Indice dell'immagine corrente
         self.perimeters = {}  # filename -> 4 points
         self.preview_size = 60  # dimensione preview regolabile
         self.processing = {}  # filename -> bool (in analisi)
@@ -217,7 +221,7 @@ class MainWindow(QMainWindow):
         # Sotto: barra navigazione (Start Analyze, Start Analyze All)
         nav_layout = QHBoxLayout()
         self.analyze_btn = QPushButton("Start Analyze")
-        self.analyze_btn.clicked.connect(lambda: self.start_analyze()) # Nuova connessione, idx sarà None di default
+        self.analyze_btn.clicked.connect(lambda: self.start_analyze())  # Nuova connessione, idx sarà None di default
         self.analyze_all_btn = QPushButton("Start Analyze All")
         self.analyze_all_btn.clicked.connect(self.start_analyze_all)
         nav_layout.addStretch(1)
@@ -299,7 +303,7 @@ class MainWindow(QMainWindow):
     def save_current_perimeter(self):
         fname = self.image_files[self.current_idx]
         current_points = self.img_label.get_points().tolist()
-        print(f"[DEBUG] save_current_perimeter for {fname} (current_idx: {self.current_idx}): {current_points}")
+        logger.debug(f"save_current_perimeter for {fname} (current_idx: {self.current_idx}): {current_points}")
         self.perimeters[fname] = current_points
 
     def on_preview_selected(self, row):
@@ -325,20 +329,17 @@ class MainWindow(QMainWindow):
         if actual_idx_for_processing is None:
             # Chiamata dal pulsante "Start Analyze" (tramite lambda, idx è None)
             actual_idx_for_processing = self.current_idx
-            # Salva il perimetro per l'immagine corrente perché l'utente potrebbe averlo modificato
-            print(f"[DEBUG] Start Analyze button clicked for current image {actual_idx_for_processing}. Saving perimeter.")
+            logger.debug(f"Start Analyze button clicked for current image {actual_idx_for_processing}. Saving perimeter.")
             self.save_current_perimeter()
         else:
             # Chiamata da start_analyze_all con un indice specifico
-            print(f"[DEBUG] start_analyze called for specific index {actual_idx_for_processing}.")
-            # Non salvare il perimetro dell'editor corrente, si usano i perimetri di actual_idx_for_processing.
-            pass
+            logger.debug(f"start_analyze called for specific index {actual_idx_for_processing}.")
 
         fname = self.image_files[actual_idx_for_processing]
 
         # Ottieni le coordinate. Se chiamato da bottone, save_current_perimeter le ha appena aggiornate.
         coords = self.perimeters.get(fname)
-        print(f"[DEBUG] Coords for {fname} before None check: {coords}")
+        logger.debug(f"Coords for {fname} before None check: {coords}")
 
         if coords is None:
             # Inizializza le coordinate se non esistono (es. prima analisi per questa immagine)
@@ -347,21 +348,21 @@ class MainWindow(QMainWindow):
             if img_for_coords is not None:
                 h, w = img_for_coords.shape[:2]
                 coords = [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]]
-                self.perimeters[fname] = coords # Salva le coordinate di default
-                print(f"[DEBUG] Coords for {fname} initialized to default: {coords}")
+                self.perimeters[fname] = coords  # Salva le coordinate di default
+                logger.debug(f"Coords for {fname} initialized to default: {coords}")
             else:
-                print(f"Errore: Impossibile leggere l'immagine {fname} per inizializzare le coordinate. Analisi annullata.")
-                self.set_processing(fname, False) # Assicura che lo stato di processing sia resettato
+                logger.error(f"Impossibile leggere l'immagine {fname} per inizializzare le coordinate. Analisi annullata.")
+                self.set_processing(fname, False)  # Assicura che lo stato di processing sia resettato
                 return
 
         # Aggiorna il testo dei risultati OCR/LLM (placeholder)
         # Esegui la trasformazione prospettica
         img_path = os.path.join(self.image_dir, fname)
-        print(f"[DEBUG] Calling warp_image for {fname} with coords: {coords}")
+        logger.debug(f"Calling warp_image for {fname} with coords: {coords}")
         wrapped_img_cv = warp_image(img_path, coords)
 
         if wrapped_img_cv is not None:
-            print(f"[DEBUG] warp_image for {fname} returned an image.")
+            logger.debug(f"warp_image for {fname} returned an image.")
             # Assicura che l'array NumPy sia contiguo
             if not wrapped_img_cv.flags['C_CONTIGUOUS']:
                 wrapped_img_cv = np.ascontiguousarray(wrapped_img_cv)
@@ -370,46 +371,74 @@ class MainWindow(QMainWindow):
             if h_w > 0 and w_w > 0:
                 q_wrapped_img = QImage(wrapped_img_cv.data, w_w, h_w, wrapped_img_cv.strides[0], QImage.Format.Format_BGR888)
                 if q_wrapped_img.isNull():
-                    print(f"Errore: QImage creata da wrapped_img_cv per {fname} è nulla.")
+                    logger.error(f"QImage creata da wrapped_img_cv per {fname} è nulla.")
                     self.wrapped_images.pop(fname, None)
                 else:
                     self.wrapped_images[fname] = QPixmap.fromImage(q_wrapped_img)
-                    print(f"[DEBUG] QPixmap for {fname} created and stored.")
+                    logger.debug(f"QPixmap for {fname} created and stored.")
             else:
-                print(f"Errore: Immagine wrappata per {fname} ha dimensioni non valide: {w_w}x{h_w}")
+                logger.error(f"Immagine wrappata per {fname} ha dimensioni non valide: {w_w}x{h_w}")
                 self.wrapped_images.pop(fname, None)
         else:
-            print(f"[DEBUG] warp_image for {fname} returned None.")
+            logger.debug(f"warp_image for {fname} returned None.")
             self.wrapped_images.pop(fname, None)
 
         # Chiamata diretta per aggiornare la GUI e terminare lo stato di elaborazione
         self._finish_analysis_gui_update(fname, actual_idx_for_processing)
 
     def _finish_analysis_gui_update(self, fname_processed, processed_idx):
-        print(f"[DEBUG] _finish_analysis_gui_update for {fname_processed}, processed_idx: {processed_idx}, current_idx: {self.current_idx}")
+        logger.debug(f"_finish_analysis_gui_update for {fname_processed}, processed_idx: {processed_idx}, current_idx: {self.current_idx}")
         # Aggiorna il display dell'immagine wrappata solo se l'immagine processata è quella attualmente visualizzata
         if processed_idx == self.current_idx:
             self.update_wrapped_image_display(fname_processed)
 
-        self.set_processing(fname_processed, False) # Reimposta l'icona nella lista di anteprima
-        print(f"Analisi (GUI Update) completata per: {fname_processed}")
+        self.set_processing(fname_processed, False)  # Reimposta l'icona nella lista di anteprima
+        logger.info(f"Analisi (GUI Update) completata per: {fname_processed}")
 
     def start_analyze_all(self):
+        if not self.image_files:
+            logger.info("Nessun file da analizzare in start_analyze_all.")
+            return
+
         if not hasattr(self, 'ocr_results'):
             self.ocr_results = {}
 
+        # 1. Salva eventuali modifiche al perimetro dell'immagine attualmente visualizzata
+        #    prima di iniziare l'analisi di tutti i file.
+        if self.current_idx < len(self.image_files):
+            current_fname_before_all = self.image_files[self.current_idx]
+            logger.debug(f"Prima di 'Analyze All', salvataggio perimetro per l'immagine corrente: {current_fname_before_all} (idx: {self.current_idx})")
+            self.save_current_perimeter()
+        else:
+            logger.warning("current_idx non valido prima di start_analyze_all, impossibile salvare il perimetro corrente.")
+            # Considera se ritornare o procedere con cautela
+
         num_files = len(self.image_files)
-        for i, fname in enumerate(self.image_files):
+        for i in range(num_files):
+            fname_to_analyze = self.image_files[i]
+            logger.debug(f"start_analyze_all: Inizio analisi per l'immagine {i}: {fname_to_analyze}")
             self.start_analyze(idx=i)
 
+        logger.info("Analisi di tutti i file completata.")
+
+        # 2. Aggiorna il display (immagine wrappata e testo OCR) per l'immagine
+        #    che è correntemente selezionata dopo il ciclo di analisi.
         if self.current_idx < len(self.image_files):
-            curr_fname = self.image_files[self.current_idx]
-            if curr_fname in self.ocr_results:
-                self.ocr_label.setText(self.ocr_results[curr_fname])
-        print("Richiesta analisi per tutti i file.")
+            current_display_fname = self.image_files[self.current_idx]
+            logger.debug(f"Dopo 'Analyze All', aggiornamento display per l'immagine corrente: {current_display_fname} (idx: {self.current_idx})")
+
+            self.update_wrapped_image_display(current_display_fname) # Aggiorna l'immagine wrappata
+
+            if hasattr(self, 'ocr_results') and current_display_fname in self.ocr_results:
+                self.ocr_label.setText(self.ocr_results[current_display_fname])
+            else:
+                # Imposta un testo di fallback se non ci sono risultati OCR
+                self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
+        else:
+            logger.warning("current_idx non valido dopo start_analyze_all, impossibile aggiornare il display.")
 
 def handle_sigint(sig, frame):
-    print("\nTerminazione richiesta dall'utente (Ctrl+C). Uscita...")
+    logger.info("Terminazione richiesta dall'utente (Ctrl+C). Uscita...")
     QTimer.singleShot(0, QApplication.quit)
 
 # Timer per forzare la gestione dei segnali anche se la finestra non è in focus
@@ -424,7 +453,19 @@ if __name__ == "__main__":
     # 1. Gestione degli argomenti della riga di comando
     parser = argparse.ArgumentParser(description="OCR Receipt Annotator")
     parser.add_argument('--dir', type=str, default="test_receipt", help="Directory contenente le immagini delle ricevute.")
+    parser.add_argument(
+        '--log-level',
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Imposta il livello di logging (default: INFO)'
+    )
     args = parser.parse_args()
+
+    # Configurazione del logging
+    numeric_level = getattr(logging, args.log_level.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError(f'Livello di log non valido: {args.log_level}')
+    logging.basicConfig(level=numeric_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     # 2. Gestione del segnale SIGINT (Ctrl+C)
     signal.signal(signal.SIGINT, handle_sigint)

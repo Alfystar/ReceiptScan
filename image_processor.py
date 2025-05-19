@@ -1,5 +1,9 @@
 import cv2
 import numpy as np
+import logging
+
+# Ottieni un logger per questo modulo
+logger = logging.getLogger(__name__)
 
 def warp_image(image_path, coords):
     """
@@ -15,7 +19,7 @@ def warp_image(image_path, coords):
     """
     original_img = cv2.imread(image_path)
     if original_img is None:
-        print(f"Errore: Impossibile leggere l'immagine da {image_path}")
+        logger.error(f"Impossibile leggere l'immagine da {image_path}")
         return None
 
     pts1 = np.float32(coords)
@@ -39,11 +43,10 @@ def warp_image(image_path, coords):
 
     if max_width <= 0:
         max_width = w_orig if w_orig > 0 else 300
-        print(f"Attenzione: max_width calcolato era <= 0. Impostato a {max_width}")
+        logger.warning(f"max_width calcolato era <= 0. Impostato a {max_width} per {image_path}")
     if max_height <= 0:
         max_height = h_orig if h_orig > 0 else 300
-        print(f"Attenzione: max_height calcolato era <= 0. Impostato a {max_height}")
-
+        logger.warning(f"max_height calcolato era <= 0. Impostato a {max_height} per {image_path}")
 
     pts2 = np.float32([[0, 0], [max_width - 1, 0], [max_width - 1, max_height - 1], [0, max_height - 1]])
 
@@ -52,11 +55,13 @@ def warp_image(image_path, coords):
         wrapped_img = cv2.warpPerspective(original_img, matrix, (max_width, max_height))
         return wrapped_img
     except cv2.error as e:
-        print(f"Errore OpenCV durante la trasformazione prospettica: {e}")
+        logger.error(f"Errore OpenCV durante la trasformazione prospettica per {image_path}: {e}")
         return None
 
 # Esempio di utilizzo (può essere rimosso o commentato)
 if __name__ == '__main__':
+    # Configurazione base del logging per l'esempio
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     # Questo è solo un esempio, assicurati che il percorso e le coordinate siano validi
     test_image_path = 'test_receipt/lo-scontrino-fiscale.jpg'
     test_coords = [[100, 100], [700, 100], [700, 500], [100, 500]]
@@ -66,4 +71,4 @@ if __name__ == '__main__':
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     else:
-        print("Impossibile wrappare l'immagine.")
+        logger.info("Impossibile wrappare l'immagine nell'esempio.")
