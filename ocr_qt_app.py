@@ -292,7 +292,15 @@ class MainWindow(QMainWindow):
             idx = self.current_idx
         self.save_current_perimeter()
         fname = self.image_files[idx]
+        # Se i vertici non sono ancora stati aperti, inizializza ai 4 estremi
         coords = self.perimeters.get(fname)
+        if coords is None:
+            img_path = os.path.join(self.image_dir, fname)
+            img = cv2.imread(img_path)
+            if img is not None:
+                h, w = img.shape[:2]
+                coords = [[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]]
+                self.perimeters[fname] = coords
         # Salva info analisi per ogni file
         if not hasattr(self, 'ocr_results'):
             self.ocr_results = {}
@@ -309,8 +317,16 @@ class MainWindow(QMainWindow):
             self.ocr_results = {}
         for idx, fname in enumerate(self.image_files):
             self.save_current_perimeter()
-            self.set_processing(fname, True)
+            # Se i vertici non sono ancora stati aperti, inizializza ai 4 estremi
             coords = self.perimeters.get(fname)
+            if coords is None:
+                img_path = os.path.join(self.image_dir, fname)
+                img = cv2.imread(img_path)
+                if img is not None:
+                    h, w = img.shape[:2]
+                    coords = [[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]]
+                    self.perimeters[fname] = coords
+            self.set_processing(fname, True)
             self.ocr_results[fname] = f"<b>Analisi OCR/LLM</b><br>Richiesta analisi per:<br>{fname}<br>Vertici:<br>{coords}"
             QTimer.singleShot(2000 + idx*500, lambda f=fname: self.set_processing(f, False))
         # Aggiorna la UI con il risultato del file corrente
