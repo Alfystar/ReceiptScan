@@ -124,6 +124,13 @@ class MainWindow(QMainWindow):
         self.image_files.sort()
         self.current_idx = 0
         self.perimeters = {}  # filename -> 4 points
+        self.preview_size = 60  # dimensione preview regolabile
+        self.processing = {}  # filename -> bool (in analisi)
+        self.spinner_movie = None
+        spinner_path = os.path.join(os.path.dirname(__file__), 'spinner.gif')
+        if os.path.exists(spinner_path):
+            from PyQt6.QtGui import QMovie
+            self.spinner_movie = QMovie(spinner_path)
         self.init_ui()
         self.load_image()
 
@@ -131,20 +138,53 @@ class MainWindow(QMainWindow):
         main_widget = QWidget()
         main_layout = QHBoxLayout()
         # Preview verticale immagini
+        class PreviewWidget(QWidget):
+            def __init__(self, parent):
+                super().__init__(parent)
+                self.parent = parent
+                self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            def wheelEvent(self, event):
+                modifiers = QApplication.keyboardModifiers()
+                if (modifiers & Qt.KeyboardModifier.ControlModifier) or (modifiers & Qt.KeyboardModifier.MetaModifier):
+                    delta = event.angleDelta().y()
+                    if delta > 0:
+                        new_size = min(self.parent.preview_size + 8, 120)
+                    else:
+                        new_size = max(self.parent.preview_size - 8, 32)
+                    self.parent.size_slider.setValue(new_size)
+                else:
+                    super().wheelEvent(event)
         self.preview_list = QListWidget()
-        self.preview_list.setMaximumWidth(120)
-        self.preview_list.setIconSize(QSize(100, 100))
+        self.preview_list.setMaximumWidth(180)
+        self.preview_list.setIconSize(QSize(self.preview_size, self.preview_size))
+        self.preview_list.setMinimumWidth(140)
+        self.preview_list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.preview_list.setSpacing(8)
+        self.preview_list.setStyleSheet("QListWidget::item { margin-bottom: 8px; }")
+        self.preview_items = []
         for fname in self.image_files:
             img_path = os.path.join(self.image_dir, fname)
             img = cv2.imread(img_path)
             if img is not None:
                 h, w = img.shape[:2]
                 qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
-                pix = QPixmap.fromImage(qimg).scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio)
+                pix = QPixmap.fromImage(qimg).scaled(self.preview_size, self.preview_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 item = QListWidgetItem(QIcon(pix), fname)
                 self.preview_list.addItem(item)
+                self.preview_items.append(item)
         self.preview_list.currentRowChanged.connect(self.on_preview_selected)
-        main_layout.addWidget(self.preview_list, 0)
+        # Slider per regolare la dimensione delle preview
+        self.size_slider = QSlider(Qt.Orientation.Horizontal)
+        self.size_slider.setMinimum(32)
+        self.size_slider.setMaximum(120)
+        self.size_slider.setValue(self.preview_size)
+        self.size_slider.valueChanged.connect(self.update_preview_size)
+        preview_layout = QVBoxLayout()
+        preview_layout.addWidget(self.preview_list)
+        preview_layout.addWidget(self.size_slider)
+        self.preview_widget = PreviewWidget(self)
+        self.preview_widget.setLayout(preview_layout)
+        main_layout.addWidget(self.preview_widget, 0)
         # Sinistra: immagine
         self.img_label = ImageLabel()
         main_layout.addWidget(self.img_label, 2)
@@ -155,12 +195,15 @@ class MainWindow(QMainWindow):
         right_panel.addWidget(self.ocr_label)
         right_panel.addStretch(1)
         main_layout.addLayout(right_panel, 1)
-        # Sotto: barra navigazione (solo Start Analyze)
+        # Sotto: barra navigazione (Start Analyze, Start Analyze All)
         nav_layout = QHBoxLayout()
         self.analyze_btn = QPushButton("Start Analyze")
         self.analyze_btn.clicked.connect(self.start_analyze)
+        self.analyze_all_btn = QPushButton("Start Analyze All")
+        self.analyze_all_btn.clicked.connect(self.start_analyze_all)
         nav_layout.addStretch(1)
         nav_layout.addWidget(self.analyze_btn)
+        nav_layout.addWidget(self.analyze_all_btn)
         # Layout finale
         layout = QVBoxLayout()
         layout.addLayout(main_layout)
@@ -168,6 +211,42 @@ class MainWindow(QMainWindow):
         main_widget.setLayout(layout)
         self.setCentralWidget(main_widget)
         self.resize(1000, 700)
+
+    def update_preview_size(self, value):
+        self.preview_size = value
+        self.preview_list.setIconSize(QSize(self.preview_size, self.preview_size))
+        # Aggiorna le icone
+        for idx, fname in enumerate(self.image_files):
+            img_path = os.path.join(self.image_dir, fname)
+            img = cv2.imread(img_path)
+            if img is not None:
+                h, w = img.shape[:2]
+                qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
+                pix = QPixmap.fromImage(qimg).scaled(self.preview_size, self.preview_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                self.preview_items[idx].setIcon(QIcon(pix))
+        self.preview_list.update()
+
+    def set_processing(self, fname, processing=True):
+        self.processing[fname] = processing
+        idx = self.image_files.index(fname)
+        if processing and self.spinner_movie:
+            label = QLabel()
+            label.setFixedSize(self.preview_size, self.preview_size)
+            label.setStyleSheet("background: transparent;")
+            label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            label.setMovie(self.spinner_movie)
+            self.spinner_movie.start()
+            self.preview_list.setItemWidget(self.preview_items[idx], label)
+        else:
+            img_path = os.path.join(self.image_dir, fname)
+            img = cv2.imread(img_path)
+            if img is not None:
+                h, w = img.shape[:2]
+                qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
+                pix = QPixmap.fromImage(qimg).scaled(self.preview_size, self.preview_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                self.preview_items[idx].setIcon(QIcon(pix))
+                self.preview_list.setItemWidget(self.preview_items[idx], None)
+        self.preview_list.update()
 
     def load_image(self):
         if not self.image_files:
@@ -191,6 +270,15 @@ class MainWindow(QMainWindow):
         self.save_current_perimeter()
         self.current_idx = row
         self.load_image()
+        # Mostra il risultato OCR/LLM relativo a questo file, se presente
+        if hasattr(self, 'ocr_results'):
+            fname = self.image_files[self.current_idx]
+            if fname in self.ocr_results:
+                self.ocr_label.setText(self.ocr_results[fname])
+            else:
+                self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
+        else:
+            self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
 
     def prev_image(self):
         pass  # Disabilitato
@@ -198,11 +286,38 @@ class MainWindow(QMainWindow):
     def next_image(self):
         pass  # Disabilitato
 
-    def start_analyze(self):
+    def start_analyze(self, idx=None):
+        from PyQt6.QtCore import QTimer
+        if idx is None:
+            idx = self.current_idx
         self.save_current_perimeter()
-        fname = self.image_files[self.current_idx]
-        print(f"Richiesta analisi per: {fname} - Vertici: {self.perimeters[fname]}")
-        self.ocr_label.setText(f"<b>Analisi OCR/LLM</b><br>Richiesta analisi per:<br>{fname}<br>Vertici:<br>{self.perimeters[fname]}")
+        fname = self.image_files[idx]
+        coords = self.perimeters.get(fname)
+        # Salva info analisi per ogni file
+        if not hasattr(self, 'ocr_results'):
+            self.ocr_results = {}
+        self.ocr_results[fname] = f"<b>Analisi OCR/LLM</b><br>Richiesta analisi per:<br>{fname}<br>Vertici:<br>{coords}"
+        if idx == self.current_idx:
+            self.ocr_label.setText(self.ocr_results[fname])
+        print(f"Richiesta analisi per: {fname} - Vertici: {coords}")
+        self.set_processing(fname, True)
+        QTimer.singleShot(2000, lambda: self.set_processing(fname, False))
+
+    def start_analyze_all(self):
+        from PyQt6.QtCore import QTimer
+        if not hasattr(self, 'ocr_results'):
+            self.ocr_results = {}
+        for idx, fname in enumerate(self.image_files):
+            self.save_current_perimeter()
+            self.set_processing(fname, True)
+            coords = self.perimeters.get(fname)
+            self.ocr_results[fname] = f"<b>Analisi OCR/LLM</b><br>Richiesta analisi per:<br>{fname}<br>Vertici:<br>{coords}"
+            QTimer.singleShot(2000 + idx*500, lambda f=fname: self.set_processing(f, False))
+        # Aggiorna la UI con il risultato del file corrente
+        curr_fname = self.image_files[self.current_idx]
+        self.ocr_label.setText(self.ocr_results[curr_fname])
+        print("Richiesta analisi per tutti i file.")
+
 
 if __name__ == "__main__":
     import signal
@@ -228,3 +343,4 @@ if __name__ == "__main__":
     window = MainWindow(args.dir)
     window.show()
     sys.exit(app.exec())
+
