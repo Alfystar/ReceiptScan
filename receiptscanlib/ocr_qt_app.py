@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 # Modificata l'importazione per essere relativa al package
 from .image_processor import warp_image
+from .ocr_analyzer import init_ocr_model, analyze_image_with_ocr  # Import OCR functions
 
 # Configurazione del logger per questo modulo
 logger = logging.getLogger(__name__)
@@ -141,6 +142,12 @@ class MainWindow(QMainWindow):
         self.preview_size = 60  # dimensione preview regolabile
         self.processing = {}  # filename -> bool (in analisi)
         self.wrapped_images = {}  # filename -> QPixmap of wrapped image
+        self.ocr_results = {}  # filename -> str (risultato OCR)
+
+        # Inizializza il modello OCR
+        if not init_ocr_model():
+            logger.error("Impossibile inizializzare il modello OCR. Le funzionalità OCR non saranno disponibili.")
+
         self.init_ui()
         self.load_image()
 
@@ -215,6 +222,7 @@ class MainWindow(QMainWindow):
         right_panel = QVBoxLayout()
         self.ocr_label = QLabel("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
         self.ocr_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.ocr_label.setWordWrap(True)  # Per andare a capo automaticamente
         right_panel.addWidget(self.ocr_label)
         right_panel.addStretch(1)
         main_layout.addLayout(right_panel, 1)
@@ -313,14 +321,11 @@ class MainWindow(QMainWindow):
         self.current_idx = row
         self.load_image()
         # Mostra il risultato OCR/LLM relativo a questo file, se presente
-        if hasattr(self, 'ocr_results'):
-            fname = self.image_files[self.current_idx]
-            if fname in self.ocr_results:
-                self.ocr_label.setText(self.ocr_results[fname])
-            else:
-                self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
+        fname = self.image_files[self.current_idx]
+        if fname in self.ocr_results:
+            self.ocr_label.setText(self.ocr_results[fname])
         else:
-            self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
+            self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(Nessun risultato per questo file o analisi non eseguita)")
         self.update_wrapped_image_display()  # Aggiorna display immagine wrappata
 
     def start_analyze(self, idx=None):
@@ -336,6 +341,7 @@ class MainWindow(QMainWindow):
             logger.debug(f"start_analyze called for specific index {actual_idx_for_processing}.")
 
         fname = self.image_files[actual_idx_for_processing]
+        self.set_processing(fname, True)  # Imposta lo stato di elaborazione
 
         # Ottieni le coordinate. Se chiamato da bottone, save_current_perimeter le ha appena aggiornate.
         coords = self.perimeters.get(fname)
@@ -353,13 +359,16 @@ class MainWindow(QMainWindow):
             else:
                 logger.error(f"Impossibile leggere l'immagine {fname} per inizializzare le coordinate. Analisi annullata.")
                 self.set_processing(fname, False)  # Assicura che lo stato di processing sia resettato
+                if actual_idx_for_processing == self.current_idx:
+                    self.ocr_label.setText("Errore: Impossibile leggere l'immagine.")
                 return
 
-        # Aggiorna il testo dei risultati OCR/LLM (placeholder)
         # Esegui la trasformazione prospettica
         img_path = os.path.join(self.image_dir, fname)
         logger.debug(f"Calling warp_image for {fname} with coords: {coords}")
         wrapped_img_cv = warp_image(img_path, coords)
+
+        ocr_text_result = "Analisi OCR non eseguita o fallita."
 
         if wrapped_img_cv is not None:
             logger.debug(f"warp_image for {fname} returned an image.")
@@ -376,21 +385,34 @@ class MainWindow(QMainWindow):
                 else:
                     self.wrapped_images[fname] = QPixmap.fromImage(q_wrapped_img)
                     logger.debug(f"QPixmap for {fname} created and stored.")
+
+                # ESEGUI OCR
+                logger.info(f"Avvio analisi OCR per {fname}...")
+                ocr_text_result = analyze_image_with_ocr(wrapped_img_cv)
+                self.ocr_results[fname] = ocr_text_result  # Salva il risultato OCR
+                logger.info(f"Analisi OCR per {fname} completata.")
+
             else:
                 logger.error(f"Immagine wrappata per {fname} ha dimensioni non valide: {w_w}x{h_w}")
                 self.wrapped_images.pop(fname, None)
+                ocr_text_result = "Errore: Immagine wrappata non valida."
         else:
             logger.debug(f"warp_image for {fname} returned None.")
             self.wrapped_images.pop(fname, None)
+            ocr_text_result = "Errore: warp_image ha fallito."
+
+        self.ocr_results[fname] = ocr_text_result  # Salva anche in caso di errore di warp
 
         # Chiamata diretta per aggiornare la GUI e terminare lo stato di elaborazione
-        self._finish_analysis_gui_update(fname, actual_idx_for_processing)
+        self._finish_analysis_gui_update(fname, actual_idx_for_processing, ocr_text_result)
 
-    def _finish_analysis_gui_update(self, fname_processed, processed_idx):
+    def _finish_analysis_gui_update(self, fname_processed, processed_idx, ocr_text_to_display):
         logger.debug(f"_finish_analysis_gui_update for {fname_processed}, processed_idx: {processed_idx}, current_idx: {self.current_idx}")
-        # Aggiorna il display dell'immagine wrappata solo se l'immagine processata è quella attualmente visualizzata
+        # Aggiorna il display dell'immagine wrappata e il testo OCR
+        # solo se l'immagine processata è quella attualmente visualizzata
         if processed_idx == self.current_idx:
             self.update_wrapped_image_display(fname_processed)
+            self.ocr_label.setText(ocr_text_to_display)
 
         self.set_processing(fname_processed, False)  # Reimposta l'icona nella lista di anteprima
         logger.info(f"Analisi (GUI Update) completata per: {fname_processed}")
@@ -427,13 +449,13 @@ class MainWindow(QMainWindow):
             current_display_fname = self.image_files[self.current_idx]
             logger.debug(f"Dopo 'Analyze All', aggiornamento display per l'immagine corrente: {current_display_fname} (idx: {self.current_idx})")
 
-            self.update_wrapped_image_display(current_display_fname) # Aggiorna l'immagine wrappata
+            self.update_wrapped_image_display(current_display_fname)  # Aggiorna l'immagine wrappata
 
             if hasattr(self, 'ocr_results') and current_display_fname in self.ocr_results:
                 self.ocr_label.setText(self.ocr_results[current_display_fname])
             else:
                 # Imposta un testo di fallback se non ci sono risultati OCR
-                self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
+                self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(Risultato non disponibile o analisi non eseguita per l'immagine corrente)")
         else:
             logger.warning("current_idx non valido dopo start_analyze_all, impossibile aggiornare il display.")
 
