@@ -1,0 +1,8 @@
+torch
+transformers
+Pillow
+accelerate
+torchvision
+opencv-python
+numpy
+PyQt6
