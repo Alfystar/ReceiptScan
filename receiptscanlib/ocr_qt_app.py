@@ -13,8 +13,8 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QSlider, QListWidget, QListWidgetItem
 )
 
-# Importa la funzione di elaborazione dell'immagine dal nuovo file
-from image_processor import warp_image
+# Modificata l'importazione per essere relativa al package
+from .image_processor import warp_image
 
 # Configurazione del logger per questo modulo
 logger = logging.getLogger(__name__)

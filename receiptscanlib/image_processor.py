@@ -58,17 +58,3 @@ def warp_image(image_path, coords):
         logger.error(f"Errore OpenCV durante la trasformazione prospettica per {image_path}: {e}")
         return None
 
-# Esempio di utilizzo (può essere rimosso o commentato)
-if __name__ == '__main__':
-    # Configurazione base del logging per l'esempio
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    # Questo è solo un esempio, assicurati che il percorso e le coordinate siano validi
-    test_image_path = 'test_receipt/lo-scontrino-fiscale.jpg'
-    test_coords = [[100, 100], [700, 100], [700, 500], [100, 500]]
-    wrapped = warp_image(test_image_path, test_coords)
-    if wrapped is not None:
-        cv2.imshow("Wrapped Image", wrapped)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-    else:
-        logger.info("Impossibile wrappare l'immagine nell'esempio.")
