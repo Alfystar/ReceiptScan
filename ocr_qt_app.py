@@ -1,12 +1,20 @@
-import sys
+import argparse
 import os
+import signal
+import sys
+
 import cv2
 import numpy as np
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QFileDialog, QSlider, QListWidget, QListWidgetItem
-)
-from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QIcon
+from PyQt6.QtCore import QTimer
 from PyQt6.QtCore import Qt, QPoint, QSize
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QIcon
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QSlider, QListWidget, QListWidgetItem
+)
+
+# Importa la funzione di elaborazione dell'immagine dal nuovo file
+from image_processor import warp_image
+
 
 class ImageLabel(QLabel):
     def __init__(self, parent=None):
@@ -15,7 +23,8 @@ class ImageLabel(QLabel):
         self.image = None
         self.points = []
         self.dragging_idx = None
-        self.radius = 7
+        self.radius_dot_draw = 3
+        self.radius_select_area = 30
         self.sapphire = QColor(255, 56, 0)
         self.orange = QColor(0, 165, 255)
         self.setMinimumSize(400, 400)
@@ -24,10 +33,10 @@ class ImageLabel(QLabel):
         self.image = image.copy()
         h, w = self.image.shape[:2]
         if points is None or len(points) != 4:
-            self.points = [[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]]
+            self.points = [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]]
         else:
             self.points = [
-                [max(0, min(w-1, int(p[0]))), max(0, min(h-1, int(p[1])))]
+                [max(0, min(w - 1, int(p[0]))), max(0, min(h - 1, int(p[1])))]
                 for p in points
             ]
         self.update()
@@ -57,13 +66,13 @@ class ImageLabel(QLabel):
                 for p in self.points
             ]
             for i in range(4):
-                painter.drawLine(scaled_points[i], scaled_points[(i+1)%4])
+                painter.drawLine(scaled_points[i], scaled_points[(i + 1) % 4])
             # Punti
             for i, p in enumerate(scaled_points):
                 color = self.orange if i == 0 else self.sapphire
                 painter.setPen(QPen(color, 2))
                 painter.setBrush(color)
-                painter.drawEllipse(p, self.radius, self.radius)
+                painter.drawEllipse(p, self.radius_dot_draw, self.radius_dot_draw)
             painter.end()
 
     def mousePressEvent(self, event):
@@ -77,10 +86,10 @@ class ImageLabel(QLabel):
         offset_y = (widget_h - disp_h) // 2
         x = (event.position().x() - offset_x) / scale
         y = (event.position().y() - offset_y) / scale
-        if x < 0 or y < 0 or x > w-1 or y > h-1:
+        if x < 0 or y < 0 or x > w - 1 or y > h - 1:
             return
         for i, p in enumerate(self.points):
-            if np.linalg.norm([x - p[0], y - p[1]]) < self.radius*2:
+            if np.linalg.norm([x - p[0], y - p[1]]) < self.radius_select_area:
                 if event.button() == Qt.MouseButton.LeftButton:
                     self.dragging_idx = i
                 elif event.button() == Qt.MouseButton.RightButton:
@@ -88,11 +97,11 @@ class ImageLabel(QLabel):
                     if i == 0:
                         self.points[i] = [0, 0]
                     elif i == 1:
-                        self.points[i] = [w-1, 0]
+                        self.points[i] = [w - 1, 0]
                     elif i == 2:
-                        self.points[i] = [w-1, h-1]
+                        self.points[i] = [w - 1, h - 1]
                     elif i == 3:
-                        self.points[i] = [0, h-1]
+                        self.points[i] = [0, h - 1]
                     self.update()
                 return
 
@@ -107,13 +116,14 @@ class ImageLabel(QLabel):
         offset_y = (widget_h - disp_h) // 2
         x = (event.position().x() - offset_x) / scale
         y = (event.position().y() - offset_y) / scale
-        x = max(0, min(w-1, int(x)))
-        y = max(0, min(h-1, int(y)))
+        x = max(0, min(w - 1, int(x)))
+        y = max(0, min(h - 1, int(y)))
         self.points[self.dragging_idx] = [x, y]
         self.update()
 
     def mouseReleaseEvent(self, event):
         self.dragging_idx = None
+
 
 class MainWindow(QMainWindow):
     def __init__(self, image_dir):
@@ -122,27 +132,25 @@ class MainWindow(QMainWindow):
         self.image_dir = image_dir
         self.image_files = [f for f in os.listdir(image_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
         self.image_files.sort()
-        self.current_idx = 0
+        self.current_idx = 0 # Indice dell'immagine corrente
         self.perimeters = {}  # filename -> 4 points
         self.preview_size = 60  # dimensione preview regolabile
         self.processing = {}  # filename -> bool (in analisi)
-        self.spinner_movie = None
-        spinner_path = os.path.join(os.path.dirname(__file__), 'spinner.gif')
-        if os.path.exists(spinner_path):
-            from PyQt6.QtGui import QMovie
-            self.spinner_movie = QMovie(spinner_path)
+        self.wrapped_images = {}  # filename -> QPixmap of wrapped image
         self.init_ui()
         self.load_image()
 
     def init_ui(self):
         main_widget = QWidget()
         main_layout = QHBoxLayout()
+
         # Preview verticale immagini
         class PreviewWidget(QWidget):
             def __init__(self, parent):
                 super().__init__(parent)
                 self.parent = parent
                 self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
             def wheelEvent(self, event):
                 modifiers = QApplication.keyboardModifiers()
                 if (modifiers & Qt.KeyboardModifier.ControlModifier) or (modifiers & Qt.KeyboardModifier.MetaModifier):
@@ -154,6 +162,7 @@ class MainWindow(QMainWindow):
                     self.parent.size_slider.setValue(new_size)
                 else:
                     super().wheelEvent(event)
+
         self.preview_list = QListWidget()
         self.preview_list.setMaximumWidth(180)
         self.preview_list.setIconSize(QSize(self.preview_size, self.preview_size))
@@ -180,6 +189,10 @@ class MainWindow(QMainWindow):
         self.size_slider.setValue(self.preview_size)
         self.size_slider.valueChanged.connect(self.update_preview_size)
         preview_layout = QVBoxLayout()
+        # Aggiungi un titolo alla colonna di anteprima
+        preview_title_label = QLabel("Elenco File")
+        preview_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Allinea il testo al centro
+        preview_layout.addWidget(preview_title_label)  # Aggiungi il titolo al layout
         preview_layout.addWidget(self.preview_list)
         preview_layout.addWidget(self.size_slider)
         self.preview_widget = PreviewWidget(self)
@@ -188,6 +201,12 @@ class MainWindow(QMainWindow):
         # Sinistra: immagine
         self.img_label = ImageLabel()
         main_layout.addWidget(self.img_label, 2)
+        # Centro: immagine wrappata
+        self.wrapped_img_label = QLabel()  # Usiamo QLabel semplice per ora
+        self.wrapped_img_label.setMinimumSize(300, 300)  # Dimensione minima
+        self.wrapped_img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.wrapped_img_label.setStyleSheet("border: 1px solid gray;")  # Per visibilità
+        main_layout.addWidget(self.wrapped_img_label, 1)  # Aggiunto con fattore di stretch 1
         # Destra: placeholder
         right_panel = QVBoxLayout()
         self.ocr_label = QLabel("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
@@ -198,7 +217,7 @@ class MainWindow(QMainWindow):
         # Sotto: barra navigazione (Start Analyze, Start Analyze All)
         nav_layout = QHBoxLayout()
         self.analyze_btn = QPushButton("Start Analyze")
-        self.analyze_btn.clicked.connect(self.start_analyze)
+        self.analyze_btn.clicked.connect(lambda: self.start_analyze()) # Nuova connessione, idx sarà None di default
         self.analyze_all_btn = QPushButton("Start Analyze All")
         self.analyze_all_btn.clicked.connect(self.start_analyze_all)
         nav_layout.addStretch(1)
@@ -226,26 +245,32 @@ class MainWindow(QMainWindow):
                 self.preview_items[idx].setIcon(QIcon(pix))
         self.preview_list.update()
 
+    def update_wrapped_image_display(self, fname=None):
+        if fname is None:
+            fname = self.image_files[self.current_idx]
+
+        if fname in self.wrapped_images:
+            pixmap = self.wrapped_images[fname]
+            # Scala il pixmap per adattarlo al label mantenendo l'aspect ratio
+            scaled_pixmap = pixmap.scaled(self.wrapped_img_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.wrapped_img_label.setPixmap(scaled_pixmap)
+        else:
+            self.wrapped_img_label.clear()
+            self.wrapped_img_label.setText("Nessuna immagine elaborata")
+
     def set_processing(self, fname, processing=True):
         self.processing[fname] = processing
         idx = self.image_files.index(fname)
-        if processing and self.spinner_movie:
-            label = QLabel()
-            label.setFixedSize(self.preview_size, self.preview_size)
-            label.setStyleSheet("background: transparent;")
-            label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-            label.setMovie(self.spinner_movie)
-            self.spinner_movie.start()
-            self.preview_list.setItemWidget(self.preview_items[idx], label)
-        else:
-            img_path = os.path.join(self.image_dir, fname)
-            img = cv2.imread(img_path)
-            if img is not None:
-                h, w = img.shape[:2]
-                qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
-                pix = QPixmap.fromImage(qimg).scaled(self.preview_size, self.preview_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.preview_items[idx].setIcon(QIcon(pix))
-                self.preview_list.setItemWidget(self.preview_items[idx], None)
+        # Rimossa la logica dello spinner
+        img_path = os.path.join(self.image_dir, fname)
+        img = cv2.imread(img_path)
+        if img is not None:
+            h, w = img.shape[:2]
+            qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
+            pix = QPixmap.fromImage(qimg).scaled(self.preview_size, self.preview_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.preview_items[idx].setIcon(QIcon(pix))
+            # Assicurati che nessun widget personalizzato (come lo spinner) sia impostato
+            self.preview_list.setItemWidget(self.preview_items[idx], None)
         self.preview_list.update()
 
     def load_image(self):
@@ -256,13 +281,26 @@ class MainWindow(QMainWindow):
         img_path = os.path.join(self.image_dir, fname)
         img = cv2.imread(img_path)
         points = self.perimeters.get(fname)
+        if points is None:
+            img_path_for_size = os.path.join(self.image_dir, fname)
+            img_for_size = cv2.imread(img_path_for_size)
+            if img_for_size is not None:
+                h_orig, w_orig = img_for_size.shape[:2]
+                points = [[0, 0], [w_orig - 1, 0], [w_orig - 1, h_orig - 1], [0, h_orig - 1]]
+                self.perimeters[fname] = points
+            else:  # Fallback se l'immagine non può essere letta per le dimensioni
+                points = [[0, 0], [300, 0], [300, 300], [0, 300]]  # Valori di default arbitrari
+                self.perimeters[fname] = points
         self.img_label.set_image(img, points)
         self.setWindowTitle(f"OCR Receipt Annotator - {fname}")
         self.preview_list.setCurrentRow(self.current_idx)
+        self.update_wrapped_image_display()  # Aggiorna display immagine wrappata
 
     def save_current_perimeter(self):
         fname = self.image_files[self.current_idx]
-        self.perimeters[fname] = self.img_label.get_points().tolist()
+        current_points = self.img_label.get_points().tolist()
+        print(f"[DEBUG] save_current_perimeter for {fname} (current_idx: {self.current_idx}): {current_points}")
+        self.perimeters[fname] = current_points
 
     def on_preview_selected(self, row):
         if row < 0 or row >= len(self.image_files):
@@ -279,84 +317,127 @@ class MainWindow(QMainWindow):
                 self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
         else:
             self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
-
-    def prev_image(self):
-        pass  # Disabilitato
-
-    def next_image(self):
-        pass  # Disabilitato
+        self.update_wrapped_image_display()  # Aggiorna display immagine wrappata
 
     def start_analyze(self, idx=None):
-        from PyQt6.QtCore import QTimer
-        if idx is None:
-            idx = self.current_idx
-        self.save_current_perimeter()
-        fname = self.image_files[idx]
-        # Se i vertici non sono ancora stati aperti, inizializza ai 4 estremi
+        actual_idx_for_processing = idx
+
+        if actual_idx_for_processing is None:
+            # Chiamata dal pulsante "Start Analyze" (tramite lambda, idx è None)
+            actual_idx_for_processing = self.current_idx
+            # Salva il perimetro per l'immagine corrente perché l'utente potrebbe averlo modificato
+            print(f"[DEBUG] Start Analyze button clicked for current image {actual_idx_for_processing}. Saving perimeter.")
+            self.save_current_perimeter()
+        else:
+            # Chiamata da start_analyze_all con un indice specifico
+            print(f"[DEBUG] start_analyze called for specific index {actual_idx_for_processing}.")
+            # Non salvare il perimetro dell'editor corrente, si usano i perimetri di actual_idx_for_processing.
+            pass
+
+        fname = self.image_files[actual_idx_for_processing]
+
+        # Ottieni le coordinate. Se chiamato da bottone, save_current_perimeter le ha appena aggiornate.
         coords = self.perimeters.get(fname)
+        print(f"[DEBUG] Coords for {fname} before None check: {coords}")
+
         if coords is None:
-            img_path = os.path.join(self.image_dir, fname)
-            img = cv2.imread(img_path)
-            if img is not None:
-                h, w = img.shape[:2]
-                coords = [[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]]
-                self.perimeters[fname] = coords
-        # Salva info analisi per ogni file
-        if not hasattr(self, 'ocr_results'):
-            self.ocr_results = {}
-        self.ocr_results[fname] = f"<b>Analisi OCR/LLM</b><br>Richiesta analisi per:<br>{fname}<br>Vertici:<br>{coords}"
-        if idx == self.current_idx:
-            self.ocr_label.setText(self.ocr_results[fname])
-        print(f"Richiesta analisi per: {fname} - Vertici: {coords}")
-        self.set_processing(fname, True)
-        QTimer.singleShot(2000, lambda: self.set_processing(fname, False))
+            # Inizializza le coordinate se non esistono (es. prima analisi per questa immagine)
+            img_path_for_coords = os.path.join(self.image_dir, fname)
+            img_for_coords = cv2.imread(img_path_for_coords)
+            if img_for_coords is not None:
+                h, w = img_for_coords.shape[:2]
+                coords = [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]]
+                self.perimeters[fname] = coords # Salva le coordinate di default
+                print(f"[DEBUG] Coords for {fname} initialized to default: {coords}")
+            else:
+                print(f"Errore: Impossibile leggere l'immagine {fname} per inizializzare le coordinate. Analisi annullata.")
+                self.set_processing(fname, False) # Assicura che lo stato di processing sia resettato
+                return
+
+        # Aggiorna il testo dei risultati OCR/LLM (placeholder)
+        # Esegui la trasformazione prospettica
+        img_path = os.path.join(self.image_dir, fname)
+        print(f"[DEBUG] Calling warp_image for {fname} with coords: {coords}")
+        wrapped_img_cv = warp_image(img_path, coords)
+
+        if wrapped_img_cv is not None:
+            print(f"[DEBUG] warp_image for {fname} returned an image.")
+            # Assicura che l'array NumPy sia contiguo
+            if not wrapped_img_cv.flags['C_CONTIGUOUS']:
+                wrapped_img_cv = np.ascontiguousarray(wrapped_img_cv)
+
+            h_w, w_w = wrapped_img_cv.shape[:2]
+            if h_w > 0 and w_w > 0:
+                q_wrapped_img = QImage(wrapped_img_cv.data, w_w, h_w, wrapped_img_cv.strides[0], QImage.Format.Format_BGR888)
+                if q_wrapped_img.isNull():
+                    print(f"Errore: QImage creata da wrapped_img_cv per {fname} è nulla.")
+                    self.wrapped_images.pop(fname, None)
+                else:
+                    self.wrapped_images[fname] = QPixmap.fromImage(q_wrapped_img)
+                    print(f"[DEBUG] QPixmap for {fname} created and stored.")
+            else:
+                print(f"Errore: Immagine wrappata per {fname} ha dimensioni non valide: {w_w}x{h_w}")
+                self.wrapped_images.pop(fname, None)
+        else:
+            print(f"[DEBUG] warp_image for {fname} returned None.")
+            self.wrapped_images.pop(fname, None)
+
+        # Chiamata diretta per aggiornare la GUI e terminare lo stato di elaborazione
+        self._finish_analysis_gui_update(fname, actual_idx_for_processing)
+
+    def _finish_analysis_gui_update(self, fname_processed, processed_idx):
+        print(f"[DEBUG] _finish_analysis_gui_update for {fname_processed}, processed_idx: {processed_idx}, current_idx: {self.current_idx}")
+        # Aggiorna il display dell'immagine wrappata solo se l'immagine processata è quella attualmente visualizzata
+        if processed_idx == self.current_idx:
+            self.update_wrapped_image_display(fname_processed)
+
+        self.set_processing(fname_processed, False) # Reimposta l'icona nella lista di anteprima
+        print(f"Analisi (GUI Update) completata per: {fname_processed}")
+
+    def finish_analyze(self, fname, idx):
+        # Questo metodo non è più utilizzato dal timer di start_analyze.
+        # La sua logica è stata integrata in _finish_analysis_gui_update.
+        # Può essere rimosso se non ci sono altre parti del codice che lo chiamano.
+        # Per ora, lo commentiamo per chiarezza.
+        # self.set_processing(fname, False)
+        # if idx == self.current_idx:
+        #     self.update_wrapped_image_display(fname)
+        # print(f"Analisi completata per: {fname}")
+        pass
 
     def start_analyze_all(self):
-        from PyQt6.QtCore import QTimer
         if not hasattr(self, 'ocr_results'):
             self.ocr_results = {}
-        for idx, fname in enumerate(self.image_files):
-            self.save_current_perimeter()
-            # Se i vertici non sono ancora stati aperti, inizializza ai 4 estremi
-            coords = self.perimeters.get(fname)
-            if coords is None:
-                img_path = os.path.join(self.image_dir, fname)
-                img = cv2.imread(img_path)
-                if img is not None:
-                    h, w = img.shape[:2]
-                    coords = [[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]]
-                    self.perimeters[fname] = coords
-            self.set_processing(fname, True)
-            self.ocr_results[fname] = f"<b>Analisi OCR/LLM</b><br>Richiesta analisi per:<br>{fname}<br>Vertici:<br>{coords}"
-            QTimer.singleShot(2000 + idx*500, lambda f=fname: self.set_processing(f, False))
-        # Aggiorna la UI con il risultato del file corrente
-        curr_fname = self.image_files[self.current_idx]
-        self.ocr_label.setText(self.ocr_results[curr_fname])
+
+        num_files = len(self.image_files)
+        for i, fname in enumerate(self.image_files):
+            self.start_analyze(idx=i)
+
+        if self.current_idx < len(self.image_files):
+            curr_fname = self.image_files[self.current_idx]
+            if curr_fname in self.ocr_results:
+                self.ocr_label.setText(self.ocr_results[curr_fname])
         print("Richiesta analisi per tutti i file.")
 
+def handle_sigint(sig, frame):
+    print("\nTerminazione richiesta dall'utente (Ctrl+C). Uscita...")
+    QTimer.singleShot(0, QApplication.quit)
+
+# Timer per forzare la gestione dei segnali anche se la finestra non è in focus
+def keep_alive():
+    # Timer che ogni 200ms chiama processEvents per permettere la gestione di SIGINT
+    timer = QTimer()
+    timer.timeout.connect(lambda: None)
+    timer.start(200)
+    return timer
 
 if __name__ == "__main__":
-    import signal
-    from PyQt6.QtCore import QTimer
-    import threading
-    def handle_sigint(sig, frame):
-        print("\nTerminazione richiesta dall'utente (Ctrl+C). Uscita...")
-        QTimer.singleShot(0, QApplication.quit)
     signal.signal(signal.SIGINT, handle_sigint)
     app = QApplication(sys.argv)
-    # Timer per forzare la gestione dei segnali anche se la finestra non è in focus
-    def keep_alive():
-        # Timer che ogni 200ms chiama processEvents per permettere la gestione di SIGINT
-        timer = QTimer()
-        timer.timeout.connect(lambda: None)
-        timer.start(200)
-        return timer
-    _ka_timer = keep_alive()
-    import argparse
+    _ka_timer = keep_alive() # Assicura che il timer sia mantenuto in vita
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default="test_receipt", help="Directory immagini")
     args = parser.parse_args()
     window = MainWindow(args.dir)
     window.show()
     sys.exit(app.exec())
-
