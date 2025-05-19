@@ -394,17 +394,6 @@ class MainWindow(QMainWindow):
         self.set_processing(fname_processed, False) # Reimposta l'icona nella lista di anteprima
         print(f"Analisi (GUI Update) completata per: {fname_processed}")
 
-    def finish_analyze(self, fname, idx):
-        # Questo metodo non è più utilizzato dal timer di start_analyze.
-        # La sua logica è stata integrata in _finish_analysis_gui_update.
-        # Può essere rimosso se non ci sono altre parti del codice che lo chiamano.
-        # Per ora, lo commentiamo per chiarezza.
-        # self.set_processing(fname, False)
-        # if idx == self.current_idx:
-        #     self.update_wrapped_image_display(fname)
-        # print(f"Analisi completata per: {fname}")
-        pass
-
     def start_analyze_all(self):
         if not hasattr(self, 'ocr_results'):
             self.ocr_results = {}
@@ -432,12 +421,23 @@ def keep_alive():
     return timer
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, handle_sigint)
-    app = QApplication(sys.argv)
-    _ka_timer = keep_alive() # Assicura che il timer sia mantenuto in vita
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dir', type=str, default="test_receipt", help="Directory immagini")
+    # 1. Gestione degli argomenti della riga di comando
+    parser = argparse.ArgumentParser(description="OCR Receipt Annotator")
+    parser.add_argument('--dir', type=str, default="test_receipt", help="Directory contenente le immagini delle ricevute.")
     args = parser.parse_args()
-    window = MainWindow(args.dir)
+
+    # 2. Gestione del segnale SIGINT (Ctrl+C)
+    signal.signal(signal.SIGINT, handle_sigint)
+
+    # 3. Creazione dell'applicazione Qt
+    app = QApplication(sys.argv) # sys.argv viene passato a QApplication
+
+    # 4. Timer per la gestione dei segnali (opzionale, ma utile per SIGINT in GUI)
+    _ka_timer = keep_alive() # Assicura che il timer sia mantenuto in vita
+
+    # 5. Creazione e visualizzazione della finestra principale
+    window = MainWindow(args.dir) # Passa la directory delle immagini alla finestra
     window.show()
+
+    # 6. Avvio del loop di eventi dell'applicazione
     sys.exit(app.exec())
