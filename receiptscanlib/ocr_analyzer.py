@@ -71,12 +71,12 @@ def analyze_image_with_ocr(image_np_bgr):
             inputs = processor(images=pil_image, return_tensors="pt").to(device)
 
             generated_ids = model.generate(
-                pixel_values=inputs.pixel_values,
-                attention_mask=inputs.attention_mask,
+                **inputs, # Passa pixel_values e attention_mask (se presente)
+                tokenizer=processor.tokenizer, # Come nell'esempio originale
                 do_sample=False,
-                max_new_tokens=4096,
-                bos_token_id=processor.tokenizer.bos_token_id, # Aggiunto bos_token_id
-                eos_token_id=processor.tokenizer.eos_token_id  # Aggiunto anche eos_token_id per coerenza
+                max_new_tokens=4096
+                # Rimuoviamo bos_token_id e eos_token_id espliciti,
+                # lasciando che generate li gestisca tramite il tokenizer o la config del modello.
             )
 
             output_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
