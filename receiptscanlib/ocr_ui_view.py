@@ -3,8 +3,9 @@ Modulo che contiene la classe OcrUiView per la visualizzazione dell'interfaccia 
 Segue il pattern MVC (Model-View-Controller) dove questa classe rappresenta la View.
 """
 
-import os
 import logging
+import os
+
 import cv2
 import numpy as np
 from PyQt6.QtCore import Qt, QPoint, QSize, pyqtSignal
@@ -33,7 +34,7 @@ class ImageLabel(QLabel):
         self.radius_dot_draw = 3
         self.radius_select_area = 30
         self.sapphire = QColor(255, 56, 0)  # Colore rosso per i punti 2-4
-        self.orange = QColor(0, 165, 255)   # Colore azzurro per il punto 1
+        self.orange = QColor(0, 165, 255)  # Colore azzurro per il punto 1
         self.setMinimumSize(400, 400)
 
     def set_image(self, image, points=None):
@@ -247,7 +248,8 @@ class OcrUiView(QMainWindow):
         preview_layout.addWidget(self.size_slider)
 
         # Leggenda
-        legend_label = QLabel("<b>Leggenda:</b><br><span style='color: #00A5FF;'>Punto 1 (azzurro)</span><br><span style='color: #FF3800;'>Punti 2-4 (rossi)</span><br>• Trascina i punti col mouse<br>• Click destro per reset")
+        legend_label = QLabel(
+            "<b>Leggenda:</b><br><span style='color: #00A5FF;'>Punto 1 (azzurro)</span><br><span style='color: #FF3800;'>Punti 2-4 (rossi)</span><br>• Trascina i punti col mouse<br>• Click destro per reset")
         legend_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         legend_label.setWordWrap(False)
         legend_label.setStyleSheet("background-color: #f0f0f0; padding: 8px; border-radius: 3px; min-width: 170px;")
@@ -348,8 +350,8 @@ class OcrUiView(QMainWindow):
                 h, w = img.shape[:2]
                 qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
                 pix = QPixmap.fromImage(qimg).scaled(self.preview_size, self.preview_size,
-                                                 Qt.AspectRatioMode.KeepAspectRatio,
-                                                 Qt.TransformationMode.SmoothTransformation)
+                                                     Qt.AspectRatioMode.KeepAspectRatio,
+                                                     Qt.TransformationMode.SmoothTransformation)
                 item = QListWidgetItem(QIcon(pix), fname)
                 self.preview_list.addItem(item)
                 self.preview_items.append(item)
@@ -368,8 +370,8 @@ class OcrUiView(QMainWindow):
         """Imposta l'immagine elaborata."""
         if pixmap:
             scaled_pixmap = pixmap.scaled(self.wrapped_img_label.size(),
-                                      Qt.AspectRatioMode.KeepAspectRatio,
-                                      Qt.TransformationMode.SmoothTransformation)
+                                          Qt.AspectRatioMode.KeepAspectRatio,
+                                          Qt.TransformationMode.SmoothTransformation)
             self.wrapped_img_label.setPixmap(scaled_pixmap)
         else:
             self.wrapped_img_label.clear()

@@ -3,17 +3,17 @@ Modulo che contiene il controller per l'applicazione OCR secondo il pattern MVC.
 Questo controller collega la View (OcrUiView) con il Model (dati e logica).
 """
 
-import os
 import logging
+import os
+
 import cv2
 import numpy as np
-from PyQt6.QtCore import QThread, pyqtSignal, QObject, QSize, Qt
-from PyQt6.QtGui import QImage, QPixmap, QIcon
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QThread, pyqtSignal, QObject, Qt
+from PyQt6.QtGui import QImage, QPixmap
 
-from .ocr_ui_view import OcrUiView
 from .image_processor import warp_image
 from .ocr_analyzer import init_ocr_model, analyze_image_with_ocr
+from .ocr_ui_view import OcrUiView
 
 # Configurazione del logger per questo modulo
 logger = logging.getLogger(__name__)
@@ -137,8 +137,8 @@ class OcrAppController(QObject):
                 h, w = img.shape[:2]
                 qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
                 pix = QPixmap.fromImage(qimg).scaled(value, value,
-                                                Qt.AspectRatioMode.KeepAspectRatio,
-                                                Qt.TransformationMode.SmoothTransformation)
+                                                     Qt.AspectRatioMode.KeepAspectRatio,
+                                                     Qt.TransformationMode.SmoothTransformation)
                 self.view.update_preview_icon(idx, pix)
 
     def update_wrapped_image_display(self, fname=None):
@@ -162,8 +162,8 @@ class OcrAppController(QObject):
             h, w = img.shape[:2]
             qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
             pix = QPixmap.fromImage(qimg).scaled(self.view.preview_size, self.view.preview_size,
-                                            Qt.AspectRatioMode.KeepAspectRatio,
-                                            Qt.TransformationMode.SmoothTransformation)
+                                                 Qt.AspectRatioMode.KeepAspectRatio,
+                                                 Qt.TransformationMode.SmoothTransformation)
             self.view.update_preview_icon(idx, pix)
 
     def save_current_perimeter(self):

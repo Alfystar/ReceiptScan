@@ -1,9 +1,11 @@
+import logging
+
 import cv2
 import numpy as np
-import logging
 
 # Ottieni un logger per questo modulo
 logger = logging.getLogger(__name__)
+
 
 def warp_image(image_path, coords):
     """
@@ -57,4 +59,3 @@ def warp_image(image_path, coords):
     except cv2.error as e:
         logger.error(f"Errore OpenCV durante la trasformazione prospettica per {image_path}: {e}")
         return None
-

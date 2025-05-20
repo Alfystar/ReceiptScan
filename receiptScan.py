@@ -1,10 +1,11 @@
 import argparse
+import logging
 import signal
 import sys
-import logging
 
-from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QApplication
+
 
 # Il logger principale è configurato qui.
 # I moduli della libreria otterranno i loro logger specifici.
@@ -13,12 +14,14 @@ def handle_sigint(sig, frame):
     logging.info("Terminazione richiesta dall'utente (Ctrl+C). Uscita...")
     QTimer.singleShot(0, QApplication.quit)
 
+
 def keep_alive():
     timer = QTimer()
     # Timer che ogni 200ms chiama processEvents per permettere la gestione di SIGINT
     timer.timeout.connect(lambda: None)
     timer.start(200)
     return timer
+
 
 if __name__ == "__main__":
     # 1. Gestione degli argomenti della riga di comando
@@ -71,4 +74,3 @@ if __name__ == "__main__":
 
     # 6. Avvio del loop di eventi dell'applicazione
     sys.exit(app.exec())
-

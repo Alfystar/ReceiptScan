@@ -1,21 +1,23 @@
 import logging
 import threading
-from PIL import Image
+
+import cv2  # Per cv2.cvtColor
 import numpy as np
-import cv2 # Per cv2.cvtColor
 import torch
+from PIL import Image
 from transformers import AutoProcessor, AutoModelForImageTextToText, GotOcr2Processor, GotOcr2ForConditionalGeneration
 
 # Constanti
 OCR_MODEL_NAME = "stepfun-ai/GOT-OCR-2.0-hf"
 
 # Variabili globali per il modello, il processore, il device e il lock
-model:GotOcr2ForConditionalGeneration = None
+model: GotOcr2ForConditionalGeneration = None
 processor: GotOcr2Processor = None
-device:str = None
+device: str = None
 ocr_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
+
 
 def init_ocr_model():
     """
@@ -30,7 +32,7 @@ def init_ocr_model():
 
         # Usare device_map può essere utile per modelli grandi, altrimenti .to(device) dopo il caricamento
         model = AutoModelForImageTextToText.from_pretrained(OCR_MODEL_NAME, trust_remote_code=True)
-        model.to(device) # Sposta il modello sul device scelto
+        model.to(device)  # Sposta il modello sul device scelto
         processor = AutoProcessor.from_pretrained(OCR_MODEL_NAME, trust_remote_code=True)
 
         logger.info("Modello OCR inizializzato con successo.")
@@ -43,7 +45,8 @@ def init_ocr_model():
         logger.error(f"Errore durante l'inizializzazione del modello OCR: {e}")
         model = None
         processor = None
-        return False # Assicura che False sia restituito in caso di eccezione generica
+        return False  # Assicura che False sia restituito in caso di eccezione generica
+
 
 def analyze_image_with_ocr(image_np_bgr):
     """
@@ -61,21 +64,22 @@ def analyze_image_with_ocr(image_np_bgr):
         logger.error("Modello OCR non inizializzato. Chiamare init_ocr_model() prima.")
         return "Errore: Modello OCR non inizializzato."
 
-    with ocr_lock: # Acquisisce il lock per l'accesso esclusivo al modello
+    with ocr_lock:  # Acquisisce il lock per l'accesso esclusivo al modello
         try:
             logger.info("Inizio analisi OCR sull'immagine.")
 
             # Converti l'immagine da OpenCV BGR (NumPy) a PIL RGB
             image_rgb = cv2.cvtColor(image_np_bgr, cv2.COLOR_BGR2RGB)
             pil_image = Image.fromarray(image_rgb)
-            logger.info(f"Analisi OCR: Dimensioni immagine PIL prima del processore: {pil_image.size}") # Log delle dimensioni
+            logger.info(f"Analisi OCR: Dimensioni immagine PIL prima del processore: {pil_image.size}")  # Log delle dimensioni
 
             inputs = processor(images=pil_image, return_tensors="pt", format=True).to(device)
-            logger.debug(f"Analisi OCR: Input tensori pronti per il modello (device: {device}). Shape pixel_values: {inputs.get('pixel_values').shape if inputs.get('pixel_values') is not None else 'N/A'}")
+            logger.debug(
+                f"Analisi OCR: Input tensori pronti per il modello (device: {device}). Shape pixel_values: {inputs.get('pixel_values').shape if inputs.get('pixel_values') is not None else 'N/A'}")
 
             logger.info("Analisi OCR: Chiamata a model.generate...")
             generated_ids = model.generate(
-                **inputs, # Passa pixel_values e attention_mask (se presente)
+                **inputs,  # Passa pixel_values e attention_mask (se presente)
                 do_sample=False,
                 tokenizer=processor.tokenizer,
                 stop_strings="<|im_end|>",
@@ -85,7 +89,7 @@ def analyze_image_with_ocr(image_np_bgr):
             )
             logger.info("Analisi OCR: model.generate completato.")
 
-            output_text = processor.batch_decode(generated_ids[:, inputs["input_ids"].shape[1] :], skip_special_tokens=True)[0]
+            output_text = processor.batch_decode(generated_ids[:, inputs["input_ids"].shape[1]:], skip_special_tokens=True)[0]
 
             logger.info("Analisi OCR completata con successo.")
             return output_text.strip()
@@ -99,6 +103,7 @@ def analyze_image_with_ocr(image_np_bgr):
         except Exception as e:
             logger.error(f"Errore generico durante l'analisi OCR: {e}", exc_info=True)
             return f"Errore OCR (Generico): {str(e)}"
+
 
 if __name__ == '__main__':
     # Piccolo test (eseguire solo se lo script è chiamato direttamente)
