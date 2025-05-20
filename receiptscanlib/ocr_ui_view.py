@@ -195,24 +195,97 @@ class OcrUiView(QMainWindow):
         self.preview_widget.setLayout(preview_layout)
         main_layout.addWidget(self.preview_widget, 0)
 
-        # Sinistra: immagine originale con punti di controllo
+        # Contenitore per i blocchi di analisi con effetto ombra e sfumatura
+        analysis_container = QWidget()
+        analysis_container.setObjectName("analysisContainer")
+        analysis_container.setStyleSheet("""
+            #analysisContainer {
+                background-color: #f8f8f8;
+                border-radius: 8px;
+                border: 1px solid #ddd;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            }
+        """)
+        analysis_layout = QVBoxLayout(analysis_container)
+
+        # Layout orizzontale per tutti i pannelli di analisi
+        analysis_panels_layout = QHBoxLayout()
+
+        # Pannello sinistra: immagine originale con titolo e punti di controllo
+        orig_image_panel = QWidget()
+        orig_image_layout = QVBoxLayout(orig_image_panel)
+
+        orig_title_label = QLabel("<b>Immagine Originale</b>")
+        orig_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        orig_image_layout.addWidget(orig_title_label)
+
         self.img_label = ImageLabel()
-        main_layout.addWidget(self.img_label, 2)
+        orig_image_layout.addWidget(self.img_label)
+
+        analysis_panels_layout.addWidget(orig_image_panel, 2)  # Mantiene la proporzione 2
+
+        # Layout per i blocchi a destra
+        right_side_layout = QHBoxLayout()
 
         # Centro: immagine wrappata e campo commenti
         center_layout = self._setup_center_panel()
         center_widget = QWidget()
         center_widget.setLayout(center_layout)
-        main_layout.addWidget(center_widget, 1)
+        right_side_layout.addWidget(center_widget, 1)
 
         # Destra: textarea OCR scrollabile
         right_panel = self._setup_right_panel()
         right_widget = QWidget()
         right_widget.setLayout(right_panel)
-        main_layout.addWidget(right_widget, 1)
+        right_side_layout.addWidget(right_widget, 1)
 
-        # Sotto: barra navigazione
-        nav_layout = self._setup_navigation_bar()
+        analysis_panels_layout.addLayout(right_side_layout, 3)  # La parte destra mantiene proporzione 3
+
+        # Aggiungiamo il layout dei pannelli al contenitore di analisi
+        analysis_layout.addLayout(analysis_panels_layout)
+
+        # Pulsante analizza (all'interno del container di analisi)
+        self.analyze_btn = QPushButton("Analizza")
+        self.analyze_btn.clicked.connect(self._on_analyze_clicked)
+        self.analyze_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        analyze_btn_layout = QHBoxLayout()
+        analyze_btn_layout.addStretch(1)
+        analyze_btn_layout.addWidget(self.analyze_btn)
+        analyze_btn_layout.addStretch(1)
+        analysis_layout.addLayout(analyze_btn_layout)
+
+        # Aggiungiamo il contenitore di analisi al layout principale
+        main_layout.addWidget(analysis_container, 5)  # Proporzione maggiore per tutto il blocco di analisi
+
+        # Sotto: barra navigazione solo con "Analizza Tutto" (all'esterno del contenitore)
+        nav_layout = QHBoxLayout()
+        self.analyze_all_btn = QPushButton("Analizza Tutto")
+        self.analyze_all_btn.clicked.connect(self._on_analyze_all_clicked)
+        self.analyze_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0b7dda;
+            }
+        """)
+        nav_layout.addStretch(1)
+        nav_layout.addWidget(self.analyze_all_btn)
 
         # Layout finale
         layout = QVBoxLayout()
@@ -299,22 +372,6 @@ class OcrUiView(QMainWindow):
 
         return right_layout
 
-    def _setup_navigation_bar(self):
-        """Configura la barra di navigazione inferiore."""
-        nav_layout = QHBoxLayout()
-
-        # Pulsante "Analizza"
-        self.analyze_button = QPushButton("Analizza")
-        self.analyze_button.clicked.connect(self._on_analyze_clicked)
-        nav_layout.addWidget(self.analyze_button)
-
-        # Pulsante "Analizza Tutto"
-        self.analyze_all_button = QPushButton("Analizza Tutto")
-        self.analyze_all_button.clicked.connect(self._on_analyze_all_clicked)
-        nav_layout.addWidget(self.analyze_all_button)
-
-        return nav_layout
-
     def _on_preview_selected(self, index):
         """Gestisce la selezione di un'anteprima."""
         self.preview_selected.emit(index)
@@ -391,4 +448,7 @@ class OcrUiView(QMainWindow):
     def get_current_points(self):
         """Ottiene i punti di controllo correnti dall'ImageLabel."""
         return self.img_label.get_points()
+
+
+
 
