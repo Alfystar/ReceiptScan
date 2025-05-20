@@ -229,7 +229,7 @@ class MainWindow(QMainWindow):
         # Sotto: barra navigazione (Start Analyze, Start Analyze All)
         nav_layout = QHBoxLayout()
         self.analyze_btn = QPushButton("Start Analyze")
-        self.analyze_btn.clicked.connect(lambda: self.start_analyze())  # Nuova connessione, idx sarà None di default
+        self.analyze_btn.clicked.connect(lambda: self.start_analyze(idx=None))  # Modificato per passare idx=None
         self.analyze_all_btn = QPushButton("Start Analyze All")
         self.analyze_all_btn.clicked.connect(self.start_analyze_all)
         nav_layout.addStretch(1)
@@ -367,8 +367,6 @@ class MainWindow(QMainWindow):
         img_path = os.path.join(self.image_dir, fname)
         logger.debug(f"Calling warp_image for {fname} with coords: {coords}")
         wrapped_img_cv = warp_image(img_path, coords)
-
-        ocr_text_result = "Analisi OCR non eseguita o fallita."
 
         if wrapped_img_cv is not None:
             logger.debug(f"warp_image for {fname} returned an image.")
