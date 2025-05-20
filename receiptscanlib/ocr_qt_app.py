@@ -165,16 +165,8 @@ class MainWindow(QMainWindow):
                 self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
             def wheelEvent(self, event):
-                modifiers = QApplication.keyboardModifiers()
-                if (modifiers & Qt.KeyboardModifier.ControlModifier) or (modifiers & Qt.KeyboardModifier.MetaModifier):
-                    delta = event.angleDelta().y()
-                    if delta > 0:
-                        new_size = min(self.parent.preview_size + 8, 120)
-                    else:
-                        new_size = max(self.parent.preview_size - 8, 32)
-                    self.parent.size_slider.setValue(new_size)
-                else:
-                    super().wheelEvent(event)
+                # Rimosso il cursore di zoom, lasciamo solo l'evento standard (scrolling)
+                super().wheelEvent(event)
 
         self.preview_list = QListWidget()
         self.preview_list.setMaximumWidth(180)
@@ -210,10 +202,10 @@ class MainWindow(QMainWindow):
         preview_layout.addWidget(self.size_slider)
 
         # Aggiungi la leggenda sotto lo slider
-        legend_label = QLabel("<b>Leggenda:</b><br><span style='color: #00A5FF;'>Punto 1 (arancione)</span><br><span style='color: #FF3800;'>Punti 2-4 (rossi)</span><br>• Trascina i punti col mouse<br>• Click destro per reset")
+        legend_label = QLabel("<b>Leggenda:</b><br><span style='color: #00A5FF;'>Punto 1 (azzurro)</span><br><span style='color: #FF3800;'>Punti 2-4 (rossi)</span><br>• Trascina i punti col mouse<br>• Click destro per reset")
         legend_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        legend_label.setWordWrap(True)
-        legend_label.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 3px;")
+        legend_label.setWordWrap(False)  # Impedisci il wrap del testo
+        legend_label.setStyleSheet("background-color: #f0f0f0; padding: 8px; border-radius: 3px; min-width: 170px;")  # Box più largo
         preview_layout.addWidget(legend_label)
 
         self.preview_widget = PreviewWidget(self)
