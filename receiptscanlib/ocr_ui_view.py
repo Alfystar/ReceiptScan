@@ -208,16 +208,34 @@ class OcrUiView(QMainWindow):
         """)
         analysis_layout = QVBoxLayout(analysis_container)
 
+        # Riga dei titoli - allineati tutti alla stessa altezza
+        titles_layout = QHBoxLayout()
+
+        # Titolo immagine originale
+        orig_title_label = QLabel("<b>Immagine Originale</b>")
+        orig_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        titles_layout.addWidget(orig_title_label, 2)
+
+        # Titolo immagine elaborata
+        center_title_label = QLabel("<b>Immagine Elaborata</b>")
+        center_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        titles_layout.addWidget(center_title_label, 1)
+
+        # Titolo testo OCR
+        ocr_title_label = QLabel("<b>Testo OCR</b>")
+        ocr_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        titles_layout.addWidget(ocr_title_label, 1)
+
+        # Aggiungiamo la riga dei titoli al layout principale di analisi
+        analysis_layout.addLayout(titles_layout)
+
         # Layout orizzontale per tutti i pannelli di analisi
         analysis_panels_layout = QHBoxLayout()
 
-        # Pannello sinistra: immagine originale con titolo e punti di controllo
+        # Pannello sinistra: immagine originale con punti di controllo
         orig_image_panel = QWidget()
         orig_image_layout = QVBoxLayout(orig_image_panel)
-
-        orig_title_label = QLabel("<b>Immagine Originale</b>")
-        orig_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        orig_image_layout.addWidget(orig_title_label)
+        orig_image_layout.setContentsMargins(0, 0, 0, 0)  # Rimuove i margini per massimizzare lo spazio
 
         self.img_label = ImageLabel()
         orig_image_layout.addWidget(self.img_label)
@@ -329,11 +347,6 @@ class OcrUiView(QMainWindow):
         """Configura il pannello centrale con immagine wrappata e commenti."""
         center_layout = QVBoxLayout()
 
-        # Titolo della colonna centrale
-        center_title_label = QLabel("<b>Immagine Elaborata</b>")
-        center_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        center_layout.addWidget(center_title_label)
-
         # Immagine wrappata
         self.wrapped_img_label = QLabel()
         self.wrapped_img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -359,11 +372,6 @@ class OcrUiView(QMainWindow):
     def _setup_right_panel(self):
         """Configura il pannello destro con il testo OCR scrollabile."""
         right_layout = QVBoxLayout()
-
-        # Titolo della colonna OCR
-        ocr_title_label = QLabel("<b>Testo OCR</b>")
-        ocr_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        right_layout.addWidget(ocr_title_label)
 
         # Campo testo OCR
         self.ocr_text = QTextEdit()
@@ -448,7 +456,4 @@ class OcrUiView(QMainWindow):
     def get_current_points(self):
         """Ottiene i punti di controllo correnti dall'ImageLabel."""
         return self.img_label.get_points()
-
-
-
 
