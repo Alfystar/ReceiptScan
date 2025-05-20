@@ -32,7 +32,7 @@ class ImageLabel(QLabel):
         self.points = []
         self.dragging_idx = None
         self.radius_dot_draw = 3
-        self.radius_select_area = 30
+        self.radius_select_area = 50
         self.sapphire = QColor(255, 56, 0)  # Colore rosso per i punti 2-4
         self.orange = QColor(0, 165, 255)  # Colore azzurro per il punto 1
         self.setMinimumSize(400, 400)
@@ -227,7 +227,7 @@ class OcrUiView(QMainWindow):
         preview_layout = QVBoxLayout()
 
         # Titolo della colonna di anteprima
-        preview_title_label = QLabel("Elenco File")
+        preview_title_label = QLabel("<b>Elenco File</b>")
         preview_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         preview_layout.addWidget(preview_title_label)
 
@@ -256,17 +256,30 @@ class OcrUiView(QMainWindow):
         """Configura il pannello centrale con immagine wrappata e commenti."""
         center_layout = QVBoxLayout()
 
+        # Titolo della colonna centrale
+        center_title_label = QLabel("<b>Immagine Elaborata</b>")
+        center_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        center_layout.addWidget(center_title_label)
+
         # Immagine wrappata
         self.wrapped_img_label = QLabel()
         self.wrapped_img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.wrapped_img_label.setMinimumSize(200, 200)
-        center_layout.addWidget(self.wrapped_img_label)
+        self.wrapped_img_label.setMinimumSize(300, 300)
+        center_layout.addWidget(self.wrapped_img_label, 3)  # Proporzione maggiore per l'immagine
 
-        # Campo commenti
+        # Campo commenti con dimensione ridotta
+        comments_layout = QVBoxLayout()
+        comments_label = QLabel("<b>Commenti</b>")
+        comments_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        comments_layout.addWidget(comments_label)
+
         self.comment_text = QTextEdit()
         self.comment_text.setPlaceholderText("Aggiungi un commento...")
+        self.comment_text.setMaximumHeight(100)  # Altezza massima limitata
         self.comment_text.textChanged.connect(self._on_text_comment_changed)
-        center_layout.addWidget(self.comment_text)
+        comments_layout.addWidget(self.comment_text)
+
+        center_layout.addLayout(comments_layout, 1)  # Proporzione minore per i commenti
 
         return center_layout
 
@@ -275,7 +288,7 @@ class OcrUiView(QMainWindow):
         right_layout = QVBoxLayout()
 
         # Titolo della colonna OCR
-        ocr_title_label = QLabel("Testo OCR")
+        ocr_title_label = QLabel("<b>Testo OCR</b>")
         ocr_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         right_layout.addWidget(ocr_title_label)
 
