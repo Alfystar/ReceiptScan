@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 # Importiamo le classi dai rispettivi moduli nella directory ui
 from receiptscanlib.ui.image_label import ImageLabel
 from receiptscanlib.ui.preview_widget import PreviewWidget
+from receiptscanlib.ui.transaction_details_widget import TransactionDetailsWidget
 
 # Configurazione del logger per questo modulo
 logger = logging.getLogger(__name__)
@@ -198,6 +199,18 @@ class OcrUiView(QMainWindow):
         right_layout.addWidget(self.ocr_text)
 
         analysis_panels_layout.addWidget(right_widget)  # Rimuovi la proporzione
+
+        # Nuova colonna: dettagli transazione
+        details_widget = QWidget()
+        details_widget.setFixedWidth(column_width)
+        details_layout = QVBoxLayout(details_widget)
+        details_layout.setContentsMargins(0, 5, 0, 0)
+        details_layout.setSpacing(0)
+
+        # Widget dettagli transazione
+        self.transaction_details = TransactionDetailsWidget()
+        details_layout.addWidget(self.transaction_details)
+        analysis_panels_layout.addWidget(details_widget)
 
         # Aggiungiamo il layout dei pannelli al contenitore di analisi
         analysis_layout.addLayout(analysis_panels_layout)
@@ -396,3 +409,11 @@ class OcrUiView(QMainWindow):
     def get_current_points(self):
         """Ottiene i punti di controllo correnti dall'ImageLabel."""
         return self.img_label.get_points()
+
+    # Metodi pubblici per leggere/scrivere i dettagli transazione
+    def get_transaction_details(self):
+        return self.transaction_details.get_details()
+
+    def set_transaction_details(self, details):
+        self.transaction_details.set_details(details)
+
