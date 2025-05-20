@@ -203,7 +203,6 @@ class OcrUiView(QMainWindow):
                 background-color: #f8f8f8;
                 border-radius: 8px;
                 border: 1px solid #ddd;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             }
         """)
         analysis_layout = QVBoxLayout(analysis_container)
