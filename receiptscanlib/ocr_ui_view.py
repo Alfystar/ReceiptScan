@@ -238,12 +238,18 @@ class OcrUiView(QMainWindow):
 
         analysis_panels_layout.addWidget(orig_image_panel)  # Rimuovi la proporzione
 
-        # Linea verticale tra i pannelli
+        # Linea verticale tra i pannelli con margini
+        separator_container1 = QWidget()
+        separator_layout1 = QHBoxLayout(separator_container1)
+        separator_layout1.setContentsMargins(8, 0, 8, 0)  # Aggiunge margini a destra e sinistra
+
         panel_line1 = QFrame()
         panel_line1.setFrameShape(QFrame.Shape.VLine)
         panel_line1.setFrameShadow(QFrame.Shadow.Sunken)
         panel_line1.setStyleSheet("color: #aaa;")
-        analysis_panels_layout.addWidget(panel_line1, 0)
+        separator_layout1.addWidget(panel_line1)
+
+        analysis_panels_layout.addWidget(separator_container1, 0)
 
         # Centro: immagine wrappata e campo commenti
         center_widget = QWidget()
@@ -267,12 +273,8 @@ class OcrUiView(QMainWindow):
         self.wrapped_img_label.setMinimumSize(300, 300)
         center_layout.addWidget(self.wrapped_img_label, 3)  # Proporzione maggiore per l'immagine
 
-        # Linea orizzontale tra immagine elaborata e commenti
-        hline = QFrame()
-        hline.setFrameShape(QFrame.Shape.HLine)
-        hline.setFrameShadow(QFrame.Shadow.Sunken)
-        hline.setStyleSheet("color: #aaa;")
-        center_layout.addWidget(hline)
+        # Rimuoviamo la linea orizzontale visto che ora abbiamo il rettangolo dei commenti
+        # che funge già da separatore visivo
 
         # Campo commenti con dimensione ridotta in un rettangolo
         comments_container = QWidget()
@@ -303,12 +305,18 @@ class OcrUiView(QMainWindow):
 
         analysis_panels_layout.addWidget(center_widget, 1)  # Il centro ha proporzione 1
 
-        # Linea verticale tra centro e destra
+        # Linea verticale tra centro e destra con margini
+        separator_container2 = QWidget()
+        separator_layout2 = QHBoxLayout(separator_container2)
+        separator_layout2.setContentsMargins(8, 0, 8, 0)  # Aggiunge margini a destra e sinistra
+
         panel_line2 = QFrame()
         panel_line2.setFrameShape(QFrame.Shape.VLine)
         panel_line2.setFrameShadow(QFrame.Shadow.Sunken)
         panel_line2.setStyleSheet("color: #aaa;")
-        analysis_panels_layout.addWidget(panel_line2, 0)
+        separator_layout2.addWidget(panel_line2)
+
+        analysis_panels_layout.addWidget(separator_container2, 0)
 
         # Destra: textarea OCR scrollabile
         right_widget = QWidget()
