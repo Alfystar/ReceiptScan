@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, QPoint, QSize, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QIcon
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
-    QSlider, QListWidget, QListWidgetItem, QTextEdit, QFrame
+    QSlider, QListWidget, QListWidgetItem, QTextEdit, QFrame, QSpacerItem, QSizePolicy
 )
 
 # Configurazione del logger per questo modulo
@@ -216,13 +216,20 @@ class OcrUiView(QMainWindow):
         orig_image_layout = QVBoxLayout(orig_image_panel)
         orig_image_layout.setContentsMargins(0, 5, 0, 0)  # Margini minimi per avere spazio per il titolo
 
-        # Titolo immagine originale
+        # Titolo immagine originale più grande
         orig_title_label = QLabel("<b>Immagine Originale</b>")
         orig_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        orig_title_label.setStyleSheet("font-size: 14px;")
         orig_image_layout.addWidget(orig_title_label)
 
+        # Spaziatore verticale
+        vspacer = QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        orig_image_layout.addItem(vspacer)
+
+        # Immagine originale con altezza massima
         self.img_label = ImageLabel()
-        orig_image_layout.addWidget(self.img_label)
+        self.img_label.setMinimumHeight(550)  # Aumenta l'altezza minima
+        orig_image_layout.addWidget(self.img_label, 1)  # Stretching verticale massimo
 
         analysis_panels_layout.addWidget(orig_image_panel, 2)  # Mantiene la proporzione 2
 
@@ -238,10 +245,15 @@ class OcrUiView(QMainWindow):
         center_layout = QVBoxLayout(center_widget)
         center_layout.setContentsMargins(0, 5, 0, 0)  # Margini minimi per avere spazio per il titolo
 
-        # Titolo immagine elaborata
+        # Titolo immagine elaborata più grande
         center_title_label = QLabel("<b>Immagine Elaborata</b>")
         center_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        center_title_label.setStyleSheet("font-size: 14px;")
         center_layout.addWidget(center_title_label)
+
+        # Spaziatore verticale
+        vspacer2 = QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        center_layout.addItem(vspacer2)
 
         # Immagine wrappata
         self.wrapped_img_label = QLabel()
@@ -249,10 +261,18 @@ class OcrUiView(QMainWindow):
         self.wrapped_img_label.setMinimumSize(300, 300)
         center_layout.addWidget(self.wrapped_img_label, 3)  # Proporzione maggiore per l'immagine
 
+        # Linea orizzontale tra immagine elaborata e commenti
+        hline = QFrame()
+        hline.setFrameShape(QFrame.Shape.HLine)
+        hline.setFrameShadow(QFrame.Shadow.Sunken)
+        hline.setStyleSheet("color: #aaa;")
+        center_layout.addWidget(hline)
+
         # Campo commenti con dimensione ridotta
         comments_layout = QVBoxLayout()
         comments_label = QLabel("<b>Commenti</b>")
         comments_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        comments_label.setStyleSheet("font-size: 13px;")
         comments_layout.addWidget(comments_label)
 
         self.comment_text = QTextEdit()
@@ -486,6 +506,13 @@ class OcrUiView(QMainWindow):
     def get_current_points(self):
         """Ottiene i punti di controllo correnti dall'ImageLabel."""
         return self.img_label.get_points()
+
+
+
+
+
+
+
 
 
 
