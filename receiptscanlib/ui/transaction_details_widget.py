@@ -1,58 +1,103 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QComboBox, QDateEdit, QDoubleSpinBox, QTextEdit
 from PyQt6.QtCore import QDate
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QComboBox, QDateEdit, QDoubleSpinBox, QTextEdit, QFrame
+
 
 class TransactionDetailsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
         # Titolo
         title = QLabel("<b>Dettagli Transazione</b>")
-        title.setStyleSheet("font-size: 13px;")
+        title.setStyleSheet("font-size: 13px; margin-bottom: 2px;")
         layout.addWidget(title)
 
-        # Riga: Data e Totale
-        row = QHBoxLayout()
-        row.setSpacing(8)
+        # Riga: Data | divisore | Totale
+        row1 = QHBoxLayout()
+        row1.setSpacing(0)
+        # Data
+        date_col = QVBoxLayout()
+        date_label = QLabel("Data")
+        date_label.setStyleSheet("margin-bottom: 2px;")
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setDisplayFormat("dd/MM/yyyy")
-        row.addWidget(QLabel("Data"))
-        row.addWidget(self.date_edit)
+        self.date_edit.setStyleSheet("QDateEdit { background: #fff; }")
+        date_col.addWidget(date_label)
+        date_col.addWidget(self.date_edit)
+        row1.addLayout(date_col)
+
+        # Divisore verticale
+        divider1 = QFrame()
+        divider1.setFrameShape(QFrame.Shape.VLine)
+        divider1.setFrameShadow(QFrame.Shadow.Sunken)
+        divider1.setStyleSheet("color: #bbb; margin: 0 12px;")
+        row1.addWidget(divider1)
+
+        # Totale
+        total_col = QVBoxLayout()
+        total_label = QLabel("Totale")
+        total_label.setStyleSheet("margin-bottom: 2px;")
         self.total_edit = QDoubleSpinBox()
         self.total_edit.setMaximum(1000000)
         self.total_edit.setPrefix("€ ")
-        row.addWidget(QLabel("Totale"))
-        row.addWidget(self.total_edit)
-        layout.addLayout(row)
+        self.total_edit.setStyleSheet("QDoubleSpinBox { background: #fff; }")
+        total_col.addWidget(total_label)
+        total_col.addWidget(self.total_edit)
+        row1.addLayout(total_col)
+        layout.addLayout(row1)
 
-        # Tipo di pagamento
+        # Riga: Tipo pagamento | divisore | Valuta
+        row2 = QHBoxLayout()
+        row2.setSpacing(0)
+        # Tipo pagamento
+        payment_col = QVBoxLayout()
+        payment_label = QLabel("Tipo di pagamento")
+        payment_label.setStyleSheet("margin-bottom: 2px;")
         self.payment_type = QComboBox()
         self.payment_type.addItems(["Contanti", "Carta", "Bancomat", "Altro"])
-        layout.addWidget(QLabel("Tipo di pagamento"))
-        layout.addWidget(self.payment_type)
-
-        # Valuta (menu a tendina)
+        self.payment_type.setStyleSheet("QComboBox, QComboBox QAbstractItemView { background: #fff; }")
+        payment_col.addWidget(payment_label)
+        payment_col.addWidget(self.payment_type)
+        row2.addLayout(payment_col)
+        # Divisore verticale
+        divider = QFrame()
+        divider.setFrameShape(QFrame.Shape.VLine)
+        divider.setFrameShadow(QFrame.Shadow.Sunken)
+        divider.setStyleSheet("color: #bbb; margin: 0 12px;")
+        row2.addWidget(divider)
+        # Valuta
+        currency_col = QVBoxLayout()
+        currency_label = QLabel("Valuta")
+        currency_label.setStyleSheet("margin-bottom: 2px;")
         self.currency_combo = QComboBox()
         self.currency_combo.addItems(["EUR", "USD", "GBP", "CHF", "JPY", "Altro"])
-        layout.addWidget(QLabel("Valuta"))
-        layout.addWidget(self.currency_combo)
+        self.currency_combo.setStyleSheet("QComboBox, QComboBox QAbstractItemView { background: #fff; }")
+        currency_col.addWidget(currency_label)
+        currency_col.addWidget(self.currency_combo)
+        row2.addLayout(currency_col)
+        layout.addLayout(row2)
 
         # Descrizione (2-3 righe)
+        desc_label = QLabel("Descrizione")
+        desc_label.setStyleSheet("margin-top: 6px; margin-bottom: 2px;")
         self.description_edit = QTextEdit()
         self.description_edit.setFixedHeight(48)
-        layout.addWidget(QLabel("Descrizione"))
+        self.description_edit.setStyleSheet("QTextEdit { background: #fff; padding: 6px 8px; border-radius: 5px; border: 1px solid #bbb; font-size: 13px; }")
+        layout.addWidget(desc_label)
         layout.addWidget(self.description_edit)
 
         layout.addStretch(1)
         self.setStyleSheet("""
             QWidget {
-                background-color: #f0f0f0;
-                border-radius: 6px;
-                border: 1px solid #ddd;
+                background-color: transparent;
+                border: none;
+            }
+            QLabel {
+                font-size: 12px;
             }
         """)
 
