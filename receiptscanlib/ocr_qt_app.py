@@ -144,6 +144,7 @@ class MainWindow(QMainWindow):
         self.processing = {}  # filename -> bool (in analisi)
         self.wrapped_images = {}  # filename -> QPixmap of wrapped image
         self.ocr_results = {}  # filename -> str (risultato OCR)
+        self.user_comments = {}  # filename -> str (commenti utente)
 
         # Inizializza il modello OCR
         if not init_ocr_model():
@@ -207,6 +208,14 @@ class MainWindow(QMainWindow):
         preview_layout.addWidget(preview_title_label)  # Aggiungi il titolo al layout
         preview_layout.addWidget(self.preview_list)
         preview_layout.addWidget(self.size_slider)
+
+        # Aggiungi la leggenda sotto lo slider
+        legend_label = QLabel("<b>Leggenda:</b><br><span style='color: #00A5FF;'>Punto 1 (arancione)</span><br><span style='color: #FF3800;'>Punti 2-4 (rossi)</span><br>• Trascina i punti col mouse<br>• Click destro per reset")
+        legend_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        legend_label.setWordWrap(True)
+        legend_label.setStyleSheet("background-color: #f0f0f0; padding: 5px; border-radius: 3px;")
+        preview_layout.addWidget(legend_label)
+
         self.preview_widget = PreviewWidget(self)
         self.preview_widget.setLayout(preview_layout)
         main_layout.addWidget(self.preview_widget, 0)
@@ -230,6 +239,7 @@ class MainWindow(QMainWindow):
         self.comments_edit = QTextEdit()
         self.comments_edit.setPlaceholderText("Inserisci qui i tuoi commenti sull'immagine...")
         self.comments_edit.setMinimumHeight(100)
+        self.comments_edit.textChanged.connect(self.save_current_comment)  # Salva i commenti quando cambiano
         comments_layout.addWidget(self.comments_edit)
         center_layout.addLayout(comments_layout, 1)  # Proporzione minore per i commenti
 
@@ -333,6 +343,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"OCR Receipt Annotator - {fname}")
         self.preview_list.setCurrentRow(self.current_idx)
         self.update_wrapped_image_display()  # Aggiorna display immagine wrappata
+        # Carica i commenti salvati per l'immagine corrente
+        self.comments_edit.blockSignals(True)  # Evita di attivare il salvataggio durante il caricamento
+        self.comments_edit.setText(self.user_comments.get(fname, ""))
+        self.comments_edit.blockSignals(False)
 
     def save_current_perimeter(self):
         fname = self.image_files[self.current_idx]
@@ -340,10 +354,16 @@ class MainWindow(QMainWindow):
         logger.debug(f"save_current_perimeter for {fname} (current_idx: {self.current_idx}): {current_points}")
         self.perimeters[fname] = current_points
 
+    def save_current_comment(self):
+        fname = self.image_files[self.current_idx]
+        self.user_comments[fname] = self.comments_edit.toPlainText()
+        logger.debug(f"Comment saved for {fname}: {self.user_comments[fname]}")
+
     def on_preview_selected(self, row):
         if row < 0 or row >= len(self.image_files):
             return
         self.save_current_perimeter()
+        self.save_current_comment()
         self.current_idx = row
         self.load_image()
         # Mostra il risultato OCR/LLM relativo a questo file, se presente

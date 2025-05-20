@@ -70,7 +70,7 @@ def analyze_image_with_ocr(image_np_bgr):
             pil_image = Image.fromarray(image_rgb)
             logger.info(f"Analisi OCR: Dimensioni immagine PIL prima del processore: {pil_image.size}") # Log delle dimensioni
 
-            inputs = processor(images=pil_image, return_tensors="pt").to(device)
+            inputs = processor(images=pil_image, return_tensors="pt", format=True).to(device)
             logger.debug(f"Analisi OCR: Input tensori pronti per il modello (device: {device}). Shape pixel_values: {inputs.get('pixel_values').shape if inputs.get('pixel_values') is not None else 'N/A'}")
 
             logger.info("Analisi OCR: Chiamata a model.generate...")
