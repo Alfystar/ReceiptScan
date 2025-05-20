@@ -469,8 +469,7 @@ class MainWindow(QMainWindow):
             logger.warning("current_idx non valido prima di start_analyze_all, impossibile salvare il perimetro corrente.")
             # Considera se ritornare o procedere con cautela
 
-        num_files = len(self.image_files)
-        for i in range(num_files):
+        for i in range(len(self.image_files)):
             fname_to_analyze = self.image_files[i]
             logger.debug(f"start_analyze_all: Inizio analisi per l'immagine {i}: {fname_to_analyze}")
             self.start_analyze(idx=i)
