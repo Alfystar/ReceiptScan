@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, QPoint, QSize, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QIcon
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
-    QSlider, QListWidget, QListWidgetItem, QTextEdit
+    QSlider, QListWidget, QListWidgetItem, QTextEdit, QFrame
 )
 
 # Configurazione del logger per questo modulo
@@ -208,56 +208,86 @@ class OcrUiView(QMainWindow):
         """)
         analysis_layout = QVBoxLayout(analysis_container)
 
-        # Riga dei titoli - allineati tutti alla stessa altezza
-        titles_layout = QHBoxLayout()
-
-        # Titolo immagine originale
-        orig_title_label = QLabel("<b>Immagine Originale</b>")
-        orig_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        titles_layout.addWidget(orig_title_label, 2)
-
-        # Titolo immagine elaborata
-        center_title_label = QLabel("<b>Immagine Elaborata</b>")
-        center_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        titles_layout.addWidget(center_title_label, 1)
-
-        # Titolo testo OCR
-        ocr_title_label = QLabel("<b>Testo OCR</b>")
-        ocr_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        titles_layout.addWidget(ocr_title_label, 1)
-
-        # Aggiungiamo la riga dei titoli al layout principale di analisi
-        analysis_layout.addLayout(titles_layout)
-
         # Layout orizzontale per tutti i pannelli di analisi
         analysis_panels_layout = QHBoxLayout()
 
         # Pannello sinistra: immagine originale con punti di controllo
         orig_image_panel = QWidget()
         orig_image_layout = QVBoxLayout(orig_image_panel)
-        orig_image_layout.setContentsMargins(0, 0, 0, 0)  # Rimuove i margini per massimizzare lo spazio
+        orig_image_layout.setContentsMargins(0, 5, 0, 0)  # Margini minimi per avere spazio per il titolo
+
+        # Titolo immagine originale
+        orig_title_label = QLabel("<b>Immagine Originale</b>")
+        orig_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        orig_image_layout.addWidget(orig_title_label)
 
         self.img_label = ImageLabel()
         orig_image_layout.addWidget(self.img_label)
 
         analysis_panels_layout.addWidget(orig_image_panel, 2)  # Mantiene la proporzione 2
 
-        # Layout per i blocchi a destra
-        right_side_layout = QHBoxLayout()
+        # Linea verticale tra i pannelli
+        panel_line1 = QFrame()
+        panel_line1.setFrameShape(QFrame.Shape.VLine)
+        panel_line1.setFrameShadow(QFrame.Shadow.Sunken)
+        panel_line1.setStyleSheet("color: #aaa;")
+        analysis_panels_layout.addWidget(panel_line1, 0)
 
         # Centro: immagine wrappata e campo commenti
-        center_layout = self._setup_center_panel()
         center_widget = QWidget()
-        center_widget.setLayout(center_layout)
-        right_side_layout.addWidget(center_widget, 1)
+        center_layout = QVBoxLayout(center_widget)
+        center_layout.setContentsMargins(0, 5, 0, 0)  # Margini minimi per avere spazio per il titolo
+
+        # Titolo immagine elaborata
+        center_title_label = QLabel("<b>Immagine Elaborata</b>")
+        center_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        center_layout.addWidget(center_title_label)
+
+        # Immagine wrappata
+        self.wrapped_img_label = QLabel()
+        self.wrapped_img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.wrapped_img_label.setMinimumSize(300, 300)
+        center_layout.addWidget(self.wrapped_img_label, 3)  # Proporzione maggiore per l'immagine
+
+        # Campo commenti con dimensione ridotta
+        comments_layout = QVBoxLayout()
+        comments_label = QLabel("<b>Commenti</b>")
+        comments_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        comments_layout.addWidget(comments_label)
+
+        self.comment_text = QTextEdit()
+        self.comment_text.setPlaceholderText("Aggiungi un commento...")
+        self.comment_text.setMaximumHeight(100)  # Altezza massima limitata
+        self.comment_text.textChanged.connect(self._on_text_comment_changed)
+        comments_layout.addWidget(self.comment_text)
+
+        center_layout.addLayout(comments_layout, 1)  # Proporzione minore per i commenti
+
+        analysis_panels_layout.addWidget(center_widget, 1)  # Il centro ha proporzione 1
+
+        # Linea verticale tra centro e destra
+        panel_line2 = QFrame()
+        panel_line2.setFrameShape(QFrame.Shape.VLine)
+        panel_line2.setFrameShadow(QFrame.Shadow.Sunken)
+        panel_line2.setStyleSheet("color: #aaa;")
+        analysis_panels_layout.addWidget(panel_line2, 0)
 
         # Destra: textarea OCR scrollabile
-        right_panel = self._setup_right_panel()
         right_widget = QWidget()
-        right_widget.setLayout(right_panel)
-        right_side_layout.addWidget(right_widget, 1)
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(0, 5, 0, 0)  # Margini minimi per avere spazio per il titolo
 
-        analysis_panels_layout.addLayout(right_side_layout, 3)  # La parte destra mantiene proporzione 3
+        # Titolo testo OCR
+        ocr_title_label = QLabel("<b>Testo OCR</b>")
+        ocr_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        right_layout.addWidget(ocr_title_label)
+
+        # Campo testo OCR
+        self.ocr_text = QTextEdit()
+        self.ocr_text.setReadOnly(True)
+        right_layout.addWidget(self.ocr_text)
+
+        analysis_panels_layout.addWidget(right_widget, 1)  # Il pannello destro ha proporzione 1
 
         # Aggiungiamo il layout dei pannelli al contenitore di analisi
         analysis_layout.addLayout(analysis_panels_layout)
@@ -311,7 +341,7 @@ class OcrUiView(QMainWindow):
         layout.addLayout(nav_layout)
         main_widget.setLayout(layout)
         self.setCentralWidget(main_widget)
-        self.resize(1000, 700)
+        self.resize(1400, 700)
 
     def _setup_preview_panel(self):
         """Configura il pannello sinistro con le anteprime delle immagini."""
@@ -456,4 +486,7 @@ class OcrUiView(QMainWindow):
     def get_current_points(self):
         """Ottiene i punti di controllo correnti dall'ImageLabel."""
         return self.img_label.get_points()
+
+
+
 
