@@ -11,7 +11,7 @@ class TransactionDetailsWidget(QWidget):
 
         # Titolo
         title = QLabel("<b>Dettagli Transazione</b>")
-        title.setStyleSheet("font-size: 13px; margin-bottom: 2px;")
+        title.setStyleSheet("font-size: 13px; margin-bottom: 2px; margin-top: 12px;")
         layout.addWidget(title)
 
         # Riga: Data | divisore | Totale
@@ -30,12 +30,18 @@ class TransactionDetailsWidget(QWidget):
         date_col.addWidget(self.date_edit)
         row1.addLayout(date_col)
 
+        # Spazio tra Data e Totale
+        row1.addSpacing(24)
+
         # Divisore verticale
         divider1 = QFrame()
         divider1.setFrameShape(QFrame.Shape.VLine)
         divider1.setFrameShadow(QFrame.Shadow.Sunken)
         divider1.setStyleSheet("color: #bbb; margin: 0 12px;")
         row1.addWidget(divider1)
+
+        # Spazio tra divisore e Totale
+        row1.addSpacing(24)
 
         # Totale
         total_col = QVBoxLayout()
@@ -44,7 +50,7 @@ class TransactionDetailsWidget(QWidget):
         self.total_edit = QDoubleSpinBox()
         self.total_edit.setMaximum(1000000)
         self.total_edit.setPrefix("€ ")
-        self.total_edit.setStyleSheet("QDoubleSpinBox { background: #fff; }")
+        self.total_edit.setStyleSheet("QDoubleSpinBox { background: #fff; } QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 18px; height: 18px; margin: 0; padding: 0; } QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 14px; height: 14px; }")
         total_col.addWidget(total_label)
         total_col.addWidget(self.total_edit)
         row1.addLayout(total_col)
@@ -63,12 +69,20 @@ class TransactionDetailsWidget(QWidget):
         payment_col.addWidget(payment_label)
         payment_col.addWidget(self.payment_type)
         row2.addLayout(payment_col)
+
+        # Spazio tra Tipo pagamento e Valuta
+        row2.addSpacing(24)
+
         # Divisore verticale
         divider = QFrame()
         divider.setFrameShape(QFrame.Shape.VLine)
         divider.setFrameShadow(QFrame.Shadow.Sunken)
         divider.setStyleSheet("color: #bbb; margin: 0 12px;")
         row2.addWidget(divider)
+
+        # Spazio tra divisore e Valuta
+        row2.addSpacing(24)
+
         # Valuta
         currency_col = QVBoxLayout()
         currency_label = QLabel("Valuta")
