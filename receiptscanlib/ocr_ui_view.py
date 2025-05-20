@@ -155,7 +155,10 @@ class PreviewWidget(QWidget):
                 new_size = min(self.parent.preview_size + 8, 120)
             else:
                 new_size = max(self.parent.preview_size - 8, 32)
-            self.parent.size_slider.setValue(new_size)
+            # Aggiorna direttamente la dimensione dell'anteprima senza usare lo slider
+            self.parent.preview_size = new_size
+            self.parent.preview_list.setIconSize(QSize(new_size, new_size))
+            self.parent.preview_size_changed.emit(new_size)
         else:
             super().wheelEvent(event)
 
@@ -239,17 +242,9 @@ class OcrUiView(QMainWindow):
         self.preview_list.currentRowChanged.connect(self._on_preview_selected)
         preview_layout.addWidget(self.preview_list)
 
-        # Slider per la dimensione delle anteprime
-        self.size_slider = QSlider(Qt.Orientation.Horizontal)
-        self.size_slider.setMinimum(32)
-        self.size_slider.setMaximum(120)
-        self.size_slider.setValue(self.preview_size)
-        self.size_slider.valueChanged.connect(self._on_preview_size_changed)
-        preview_layout.addWidget(self.size_slider)
-
         # Leggenda
         legend_label = QLabel(
-            "<b>Leggenda:</b><br><span style='color: #00A5FF;'>Punto 1 (azzurro)</span><br><span style='color: #FF3800;'>Punti 2-4 (rossi)</span><br>• Trascina i punti col mouse<br>• Click destro per reset")
+            "<b>Leggenda:</b><br><span style='color: #00A5FF;'>Punto 1 (azzurro)</span><br><span style='color: #FF3800;'>Punti 2-4 (rossi)</span><br>• Trascina i punti col mouse<br>• Click destro per reset<br>• Zoom con Ctrl+rotellina")
         legend_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         legend_label.setWordWrap(False)
         legend_label.setStyleSheet("background-color: #f0f0f0; padding: 8px; border-radius: 3px; min-width: 170px;")
@@ -258,84 +253,70 @@ class OcrUiView(QMainWindow):
         return preview_layout
 
     def _setup_center_panel(self):
-        """Configura il pannello centrale con l'immagine elaborata e i commenti."""
+        """Configura il pannello centrale con immagine wrappata e commenti."""
         center_layout = QVBoxLayout()
 
-        # Area per visualizzare l'immagine elaborata
+        # Immagine wrappata
         self.wrapped_img_label = QLabel()
-        self.wrapped_img_label.setMinimumSize(300, 300)
         self.wrapped_img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.wrapped_img_label.setStyleSheet("border: 1px solid gray;")
-        center_layout.addWidget(self.wrapped_img_label, 3)
+        self.wrapped_img_label.setMinimumSize(200, 200)
+        center_layout.addWidget(self.wrapped_img_label)
 
-        # Area per i commenti
-        comments_layout = QVBoxLayout()
-        comments_label = QLabel("<b>Commenti</b>")
-        comments_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        comments_layout.addWidget(comments_label)
-
-        self.comments_edit = QTextEdit()
-        self.comments_edit.setPlaceholderText("Inserisci qui i tuoi commenti sull'immagine...")
-        self.comments_edit.setMinimumHeight(100)
-        self.comments_edit.textChanged.connect(self._on_comment_changed)
-        comments_layout.addWidget(self.comments_edit)
-        center_layout.addLayout(comments_layout, 1)
+        # Campo commenti
+        self.comment_text = QTextEdit()
+        self.comment_text.setPlaceholderText("Aggiungi un commento...")
+        self.comment_text.textChanged.connect(self._on_text_comment_changed)
+        center_layout.addWidget(self.comment_text)
 
         return center_layout
 
     def _setup_right_panel(self):
-        """Configura il pannello destro con i risultati OCR."""
-        right_panel = QVBoxLayout()
+        """Configura il pannello destro con il testo OCR scrollabile."""
+        right_layout = QVBoxLayout()
 
-        ocr_label = QLabel("<b>Analisi OCR/LLM</b>")
-        ocr_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        right_panel.addWidget(ocr_label)
+        # Titolo della colonna OCR
+        ocr_title_label = QLabel("Testo OCR")
+        ocr_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        right_layout.addWidget(ocr_title_label)
 
+        # Campo testo OCR
         self.ocr_text = QTextEdit()
         self.ocr_text.setReadOnly(True)
-        self.ocr_text.setPlaceholderText("Qui verrà mostrato il risultato dell'analisi OCR...")
-        right_panel.addWidget(self.ocr_text, 1)
+        right_layout.addWidget(self.ocr_text)
 
-        return right_panel
+        return right_layout
 
     def _setup_navigation_bar(self):
-        """Configura la barra di navigazione in fondo."""
+        """Configura la barra di navigazione inferiore."""
         nav_layout = QHBoxLayout()
 
-        self.analyze_btn = QPushButton("Start Analyze")
-        self.analyze_btn.clicked.connect(self._on_analyze_clicked)
+        # Pulsante "Analizza"
+        self.analyze_button = QPushButton("Analizza")
+        self.analyze_button.clicked.connect(self._on_analyze_clicked)
+        nav_layout.addWidget(self.analyze_button)
 
-        self.analyze_all_btn = QPushButton("Start Analyze All")
-        self.analyze_all_btn.clicked.connect(self._on_analyze_all_clicked)
-
-        nav_layout.addStretch(1)
-        nav_layout.addWidget(self.analyze_btn)
-        nav_layout.addWidget(self.analyze_all_btn)
+        # Pulsante "Analizza Tutto"
+        self.analyze_all_button = QPushButton("Analizza Tutto")
+        self.analyze_all_button.clicked.connect(self._on_analyze_all_clicked)
+        nav_layout.addWidget(self.analyze_all_button)
 
         return nav_layout
 
-    # Metodi gestione eventi interni che emettono segnali per il controller
-    def _on_preview_selected(self, row):
-        """Gestisce la selezione di un'anteprima dalla lista."""
-        self.preview_selected.emit(row)
-
-    def _on_preview_size_changed(self, value):
-        """Gestisce il cambio di dimensione delle anteprime."""
-        self.preview_size = value
-        self.preview_list.setIconSize(QSize(value, value))
-        self.preview_size_changed.emit(value)
+    def _on_preview_selected(self, index):
+        """Gestisce la selezione di un'anteprima."""
+        self.preview_selected.emit(index)
 
     def _on_analyze_clicked(self):
-        """Gestisce il click sul pulsante Analyze."""
+        """Gestisce il click sul pulsante 'Analizza'."""
         self.analyze_clicked.emit()
 
     def _on_analyze_all_clicked(self):
-        """Gestisce il click sul pulsante Analyze All."""
+        """Gestisce il click sul pulsante 'Analizza Tutto'."""
         self.analyze_all_clicked.emit()
 
-    def _on_comment_changed(self):
-        """Gestisce il cambio del testo nei commenti."""
-        self.text_comment_changed.emit(self.comments_edit.toPlainText())
+    def _on_text_comment_changed(self):
+        """Gestisce la modifica del testo nei commenti."""
+        self.text_comment_changed.emit(self.comment_text.toPlainText())
 
     # Metodi pubblici per aggiornare l'interfaccia (chiamati dal Controller)
     def set_image_files(self, image_dir, image_files):
@@ -350,8 +331,8 @@ class OcrUiView(QMainWindow):
                 h, w = img.shape[:2]
                 qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888)
                 pix = QPixmap.fromImage(qimg).scaled(self.preview_size, self.preview_size,
-                                                     Qt.AspectRatioMode.KeepAspectRatio,
-                                                     Qt.TransformationMode.SmoothTransformation)
+                                                 Qt.AspectRatioMode.KeepAspectRatio,
+                                                 Qt.TransformationMode.SmoothTransformation)
                 item = QListWidgetItem(QIcon(pix), fname)
                 self.preview_list.addItem(item)
                 self.preview_items.append(item)
@@ -370,8 +351,8 @@ class OcrUiView(QMainWindow):
         """Imposta l'immagine elaborata."""
         if pixmap:
             scaled_pixmap = pixmap.scaled(self.wrapped_img_label.size(),
-                                          Qt.AspectRatioMode.KeepAspectRatio,
-                                          Qt.TransformationMode.SmoothTransformation)
+                                      Qt.AspectRatioMode.KeepAspectRatio,
+                                      Qt.TransformationMode.SmoothTransformation)
             self.wrapped_img_label.setPixmap(scaled_pixmap)
         else:
             self.wrapped_img_label.clear()
@@ -384,9 +365,9 @@ class OcrUiView(QMainWindow):
     def set_comment_text(self, text):
         """Imposta il testo del commento."""
         # Blocca i segnali per evitare che il cambiamento generi un evento
-        self.comments_edit.blockSignals(True)
-        self.comments_edit.setText(text)
-        self.comments_edit.blockSignals(False)
+        self.comment_text.blockSignals(True)
+        self.comment_text.setText(text)
+        self.comment_text.blockSignals(False)
 
     def update_preview_icon(self, idx, pixmap):
         """Aggiorna l'icona di anteprima per un indice specifico."""
@@ -397,3 +378,4 @@ class OcrUiView(QMainWindow):
     def get_current_points(self):
         """Ottiene i punti di controllo correnti dall'ImageLabel."""
         return self.img_label.get_points()
+

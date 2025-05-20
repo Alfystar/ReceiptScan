@@ -180,7 +180,7 @@ class OcrAppController(QObject):
             self.user_comments[fname] = text
         else:
             # Se non viene passato un testo, ottienilo dalla view
-            self.user_comments[fname] = self.view.comments_edit.toPlainText()
+            self.user_comments[fname] = self.view.comment_text.toPlainText()
         logger.debug(f"Comment saved for {fname}: {self.user_comments[fname]}")
 
     def on_preview_selected(self, row):
