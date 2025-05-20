@@ -198,19 +198,24 @@ class OcrUiView(QMainWindow):
         self.ocr_text.setReadOnly(True)
         right_layout.addWidget(self.ocr_text)
 
-        analysis_panels_layout.addWidget(right_widget)  # Rimuovi la proporzione
-
-        # Nuova colonna: dettagli transazione
-        details_widget = QWidget()
-        details_widget.setFixedWidth(column_width)
-        details_layout = QVBoxLayout(details_widget)
-        details_layout.setContentsMargins(0, 5, 0, 0)
-        details_layout.setSpacing(0)
-
-        # Widget dettagli transazione
+        # Dettagli transazione in un rettangolo sotto il testo OCR
+        details_container = QWidget()
+        details_container.setObjectName("detailsContainer")
+        details_container.setStyleSheet("""
+            #detailsContainer {
+                background-color: #f0f0f0;
+                border-radius: 6px;
+                border: 1px solid #ddd;
+                margin-top: 12px;
+            }
+        """)
+        details_layout = QVBoxLayout(details_container)
+        details_layout.setContentsMargins(10, 10, 10, 10)
         self.transaction_details = TransactionDetailsWidget()
         details_layout.addWidget(self.transaction_details)
-        analysis_panels_layout.addWidget(details_widget)
+        right_layout.addWidget(details_container)
+
+        analysis_panels_layout.addWidget(right_widget)  # Rimuovi la proporzione
 
         # Aggiungiamo il layout dei pannelli al contenitore di analisi
         analysis_layout.addLayout(analysis_panels_layout)
