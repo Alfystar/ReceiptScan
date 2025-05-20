@@ -147,8 +147,16 @@ class PreviewWidget(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def wheelEvent(self, event):
-        # Solo scrolling standard
-        super().wheelEvent(event)
+        modifiers = QApplication.keyboardModifiers()
+        if (modifiers & Qt.KeyboardModifier.ControlModifier) or (modifiers & Qt.KeyboardModifier.MetaModifier):
+            delta = event.angleDelta().y()
+            if delta > 0:
+                new_size = min(self.parent.preview_size + 8, 120)
+            else:
+                new_size = max(self.parent.preview_size - 8, 32)
+            self.parent.size_slider.setValue(new_size)
+        else:
+            super().wheelEvent(event)
 
 
 class OcrUiView(QMainWindow):

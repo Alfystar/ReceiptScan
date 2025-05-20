@@ -40,18 +40,17 @@ if __name__ == "__main__":
         sys.exit(1)
     logging.basicConfig(level=numeric_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-    # Importa MainWindow dalla libreria DOPO aver configurato il logging,
+    # Importa il controller dalla libreria DOPO aver configurato il logging,
     # così i logger della libreria ereditano la configurazione.
     try:
-        from receiptscanlib.ocr_qt_app import MainWindow
+        from receiptscanlib.ocr_controller import OcrAppController
     except ImportError as e:
-        logging.critical(f"Errore nell'importare MainWindow da receiptscanlib.ocr_qt_app: {e}. "
+        logging.critical(f"Errore nell'importare OcrAppController da receiptscanlib.ocr_controller: {e}. "
                          f"Assicurati che la directory 'receiptscanlib' e i file al suo interno esistano e siano corretti.")
         sys.exit(1)
     except Exception as e:
-        logging.critical(f"Errore generico durante l'importazione di MainWindow: {e}")
+        logging.critical(f"Errore generico durante l'importazione di OcrAppController: {e}")
         sys.exit(1)
-
 
     # 2. Gestione del segnale SIGINT (Ctrl+C)
     signal.signal(signal.SIGINT, handle_sigint)
@@ -64,10 +63,10 @@ if __name__ == "__main__":
 
     # 5. Creazione e visualizzazione della finestra principale
     try:
-        window = MainWindow(args.dir)
-        window.show()
+        controller = OcrAppController(args.dir)
+        controller.view.show()  # Mostra la view del controller
     except Exception as e:
-        logging.critical(f"Errore durante la creazione o la visualizzazione della MainWindow: {e}")
+        logging.critical(f"Errore durante la creazione o la visualizzazione dell'applicazione: {e}")
         sys.exit(1)
 
     # 6. Avvio del loop di eventi dell'applicazione
