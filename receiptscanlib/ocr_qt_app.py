@@ -10,7 +10,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtCore import Qt, QPoint, QSize
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QIcon
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QSlider, QListWidget, QListWidgetItem
+    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout, QSlider, QListWidget, QListWidgetItem, QTextEdit
 )
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -213,24 +213,49 @@ class MainWindow(QMainWindow):
         # Sinistra: immagine
         self.img_label = ImageLabel()
         main_layout.addWidget(self.img_label, 2)
-        # Centro: immagine wrappata
-        self.wrapped_img_label = QLabel()  # Usiamo QLabel semplice per ora
-        self.wrapped_img_label.setMinimumSize(300, 300)  # Dimensione minima
+
+        # Centro: immagine wrappata e campo commenti
+        center_layout = QVBoxLayout()
+        self.wrapped_img_label = QLabel()
+        self.wrapped_img_label.setMinimumSize(300, 300)
         self.wrapped_img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.wrapped_img_label.setStyleSheet("border: 1px solid gray;")  # Per visibilità
-        main_layout.addWidget(self.wrapped_img_label, 1)  # Aggiunto con fattore di stretch 1
-        # Destra: placeholder
+        self.wrapped_img_label.setStyleSheet("border: 1px solid gray;")
+        center_layout.addWidget(self.wrapped_img_label, 3)  # Proporzione maggiore per l'immagine
+
+        # Campo commenti sotto l'immagine wrappata
+        comments_layout = QVBoxLayout()
+        comments_label = QLabel("<b>Commenti</b>")
+        comments_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        comments_layout.addWidget(comments_label)
+        self.comments_edit = QTextEdit()
+        self.comments_edit.setPlaceholderText("Inserisci qui i tuoi commenti sull'immagine...")
+        self.comments_edit.setMinimumHeight(100)
+        comments_layout.addWidget(self.comments_edit)
+        center_layout.addLayout(comments_layout, 1)  # Proporzione minore per i commenti
+
+        center_widget = QWidget()
+        center_widget.setLayout(center_layout)
+        main_layout.addWidget(center_widget, 1)
+
+        # Destra: textarea OCR scrollabile
         right_panel = QVBoxLayout()
-        self.ocr_label = QLabel("<b>Analisi OCR/LLM</b>\n(qui verrà mostrato il risultato)")
-        self.ocr_label.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.ocr_label.setWordWrap(True)  # Per andare a capo automaticamente
-        right_panel.addWidget(self.ocr_label)
-        right_panel.addStretch(1)
-        main_layout.addLayout(right_panel, 1)
+        ocr_label = QLabel("<b>Analisi OCR/LLM</b>")
+        ocr_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        right_panel.addWidget(ocr_label)
+
+        self.ocr_text = QTextEdit()
+        self.ocr_text.setReadOnly(True)  # Solo lettura
+        self.ocr_text.setPlaceholderText("Qui verrà mostrato il risultato dell'analisi OCR...")
+        right_panel.addWidget(self.ocr_text, 1)
+
+        right_widget = QWidget()
+        right_widget.setLayout(right_panel)
+        main_layout.addWidget(right_widget, 1)  # Aggiungo il widget al layout principale, non il layout
+
         # Sotto: barra navigazione (Start Analyze, Start Analyze All)
         nav_layout = QHBoxLayout()
         self.analyze_btn = QPushButton("Start Analyze")
-        self.analyze_btn.clicked.connect(lambda: self.start_analyze(idx=None))  # Modificato per passare idx=None
+        self.analyze_btn.clicked.connect(lambda: self.start_analyze(idx=None))
         self.analyze_all_btn = QPushButton("Start Analyze All")
         self.analyze_all_btn.clicked.connect(self.start_analyze_all)
         nav_layout.addStretch(1)
@@ -324,9 +349,9 @@ class MainWindow(QMainWindow):
         # Mostra il risultato OCR/LLM relativo a questo file, se presente
         fname = self.image_files[self.current_idx]
         if fname in self.ocr_results:
-            self.ocr_label.setText(self.ocr_results[fname])
+            self.ocr_text.setText(self.ocr_results[fname])
         else:
-            self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(Nessun risultato per questo file o analisi non eseguita)")
+            self.ocr_text.setText("Nessun risultato per questo file o analisi non eseguita")
         self.update_wrapped_image_display()  # Aggiorna display immagine wrappata
 
 
@@ -385,7 +410,7 @@ class MainWindow(QMainWindow):
                 logger.error(f"Impossibile leggere l'immagine {fname} per inizializzare le coordinate. Analisi annullata.")
                 self.set_processing(fname, False)  # Assicura che lo stato di processing sia resettato
                 if actual_idx_for_processing == self.current_idx:
-                    self.ocr_label.setText("Errore: Impossibile leggere l'immagine.")
+                    self.ocr_text.setText("Errore: Impossibile leggere l'immagine.")
                 return
 
         # Esegui la trasformazione prospettica
@@ -444,7 +469,7 @@ class MainWindow(QMainWindow):
     def _update_ocr_text(self, fname_processed, processed_idx, ocr_text_to_display):
         logger.debug(f"_update_ocr_text per {fname_processed}, processed_idx: {processed_idx}, current_idx: {self.current_idx}")
         if processed_idx == self.current_idx:
-            self.ocr_label.setText(ocr_text_to_display)
+            self.ocr_text.setText(ocr_text_to_display)
 
     def _finish_analysis_gui_update(self, fname_processed, processed_idx, ocr_text_to_display):
         self._update_image_display(fname_processed, processed_idx)
@@ -485,10 +510,10 @@ class MainWindow(QMainWindow):
             self.update_wrapped_image_display(current_display_fname)  # Aggiorna l'immagine wrappata
 
             if hasattr(self, 'ocr_results') and current_display_fname in self.ocr_results:
-                self.ocr_label.setText(self.ocr_results[current_display_fname])
+                self.ocr_text.setText(self.ocr_results[current_display_fname])
             else:
                 # Imposta un testo di fallback se non ci sono risultati OCR
-                self.ocr_label.setText("<b>Analisi OCR/LLM</b>\n(Risultato non disponibile o analisi non eseguita per l'immagine corrente)")
+                self.ocr_text.setText("Risultato non disponibile o analisi non eseguita per l'immagine corrente")
         else:
             logger.warning("current_idx non valido dopo start_analyze_all, impossibile aggiornare il display.")
 
