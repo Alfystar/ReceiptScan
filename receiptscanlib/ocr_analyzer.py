@@ -8,6 +8,7 @@ from PIL import Image
 from transformers import AutoProcessor, AutoModelForImageTextToText, GotOcr2Processor, GotOcr2ForConditionalGeneration
 
 # Constanti
+# https://huggingface.co/docs/transformers/en/model_doc/got_ocr2
 OCR_MODEL_NAME = "stepfun-ai/GOT-OCR-2.0-hf"
 
 # Variabili globali per il modello, il processore, il device e il lock
