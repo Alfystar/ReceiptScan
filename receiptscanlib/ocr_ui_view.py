@@ -191,25 +191,18 @@ class OcrUiView(QMainWindow):
         # TextEdit per mostrare il testo OCR con più spazio
         self.ocr_text = QTextEdit()
         self.ocr_text.setReadOnly(True)
-        self.ocr_text.setMinimumHeight(220)  # Aumentiamo l'altezza minima
+        self.ocr_text.setMinimumHeight(150)  # Altezza minima per il testo OCR
         transaction_layout.addWidget(self.ocr_text, 1)  # Proporzione 1 con stretching
-
-        # Label per i dettagli della transazione
-        details_label = QLabel("Dettagli Transazione:")
-        details_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        transaction_layout.addWidget(details_label)
 
         # Widget per i dettagli della transazione con altezza limitata
         self.transaction_details = TransactionDetailsWidget()
-        self.transaction_details.setMinimumHeight(150)
-        self.transaction_details.setMaximumHeight(160)  # Limitiamo l'altezza massima
         transaction_layout.addWidget(self.transaction_details)
 
         # Aggiungiamo il pannello al contenitore con un margin bottom specifico
         right_panel_container_layout.addWidget(transaction_panel, 1)
 
         # Aggiungiamo uno spazio extra sotto il pannello di destra (sopra il pulsante)
-        right_panel_container_layout.addItem(QSpacerItem(20, 60, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
+        # right_panel_container_layout.addItem(QSpacerItem(20, 60, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
 
         analysis_panels_layout.addWidget(right_panel_container)
 

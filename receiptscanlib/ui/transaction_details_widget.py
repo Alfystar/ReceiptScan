@@ -5,9 +5,10 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QComboBox
 class TransactionDetailsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        # self.setFixedHeight(230)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(10) # Spazio tra gli elementi
 
         # Titolo
         title = QLabel("<b>Dettagli Transazione</b>")
@@ -208,7 +209,8 @@ class TransactionDetailsWidget(QWidget):
         desc_label = QLabel("Descrizione")
         desc_label.setStyleSheet("margin-top: 6px; margin-bottom: 2px;")
         self.description_edit = QTextEdit()
-        self.description_edit.setFixedHeight(48)
+        self.description_edit.setMinimumHeight(40)
+        self.description_edit.setMaximumHeight(120)
         self.description_edit.setStyleSheet("""
             QTextEdit {
                 background-color: white;
