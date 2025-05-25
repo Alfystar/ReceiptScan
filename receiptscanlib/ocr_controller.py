@@ -5,6 +5,7 @@ Questo controller collega la View (OcrUiView) con il Model (dati e logica).
 
 import logging
 import os
+import threading
 
 import cv2
 import numpy as np
@@ -39,6 +40,20 @@ class OcrWorker(QThread):
         self.finished.emit(self.fname, self.idx, ocr_text_result)
 
 
+class ModelInitWorker(QThread):
+    """Worker thread per l'inizializzazione del modello OCR in background."""
+
+    finished = pyqtSignal(bool)  # success
+
+    def run(self):
+        # Inizializza il modello OCR in background
+        logger.info("Inizializzazione del modello OCR in background...")
+        success = init_ocr_model()
+        logger.info(f"Inizializzazione del modello OCR completata con risultato: {success}")
+        # Emetti il segnale con il risultato
+        self.finished.emit(success)
+
+
 class OcrAppController(QObject):
     """
     Controller per l'applicazione OCR secondo il pattern MVC.
@@ -66,15 +81,22 @@ class OcrAppController(QObject):
         self.ocr_results = {}  # filename -> str (risultato OCR)
         self.user_comments = {}  # filename -> str (commenti utente)
 
-        # Inizializza il modello OCR
-        if not init_ocr_model():
-            logger.error("Impossibile inizializzare il modello OCR. Le funzionalità OCR non saranno disponibili.")
+        # Flag per l'inizializzazione del modello
+        self.model_initialized = False
 
         # Collega i segnali della view alle funzioni del controller
         self._connect_signals()
 
         # Configura la view con i dati iniziali
         self._setup_view()
+
+        # Disabilita i pulsanti di analisi fino a quando il modello non è inizializzato
+        self.view.set_analyze_buttons_enabled(False)
+
+        # Inizializza il modello OCR in un thread separato
+        self.init_thread = ModelInitWorker()
+        self.init_thread.finished.connect(self.on_model_initialized)
+        self.init_thread.start()
 
     def _connect_signals(self):
         """Collega i segnali della view alle funzioni del controller."""
@@ -84,9 +106,21 @@ class OcrAppController(QObject):
         self.view.analyze_all_clicked.connect(self.start_analyze_all)
         self.view.text_comment_changed.connect(self.save_current_comment)
 
+    def on_model_initialized(self, success):
+        """Callback chiamato quando l'inizializzazione del modello OCR è completata."""
+        self.model_initialized = success
+        if success:
+            logger.info("Modello OCR inizializzato con successo. Pulsanti di analisi abilitati.")
+            self.view.set_analyze_buttons_enabled(True)
+            self.view.set_status_message("Modello AI pronto. È possibile eseguire l'analisi.")
+        else:
+            logger.error("Impossibile inizializzare il modello OCR. Le funzionalità OCR non saranno disponibili.")
+            self.view.set_status_message("Errore: modello AI non disponibile.")
+
     def _setup_view(self):
         """Configura la view con i dati iniziali."""
         self.view.set_image_files(self.image_dir, self.image_files)
+        self.view.set_status_message("Caricamento modello AI in corso...")
         self.load_image()  # Carica la prima immagine
 
     def show(self):
@@ -126,6 +160,9 @@ class OcrAppController(QObject):
             self.view.set_ocr_text(self.ocr_results[fname])
         else:
             self.view.set_ocr_text("Nessun risultato per questo file o analisi non eseguita")
+
+        # Aggiorna lo stato dei pulsanti di analisi in base allo stato del modello
+        self.view.set_analyze_buttons_enabled(self.model_initialized and not self.processing.get(fname, False))
 
     def update_preview_size(self, value):
         """Aggiorna la dimensione delle anteprime."""

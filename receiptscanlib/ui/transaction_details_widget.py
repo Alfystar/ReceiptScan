@@ -25,7 +25,63 @@ class TransactionDetailsWidget(QWidget):
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setDisplayFormat("dd/MM/yyyy")
-        self.date_edit.setStyleSheet("QDateEdit { background: #fff; }")
+
+        # Stile migliorato per il QDateEdit e il calendario popup
+        self.date_edit.setStyleSheet("""
+            QDateEdit { 
+                background-color: white; 
+                color: #212121; 
+                border: 1px solid #BDBDBD;
+                border-radius: 4px;
+                padding: 2px;
+            }
+            
+            QCalendarWidget QWidget {
+                background-color: white;
+                color: #212121;
+            }
+            
+            QCalendarWidget QToolButton {
+                background-color: #FFFFFF;
+                color: #212121;
+                border: none;
+                border-radius: 4px;
+                padding: 2px;
+                margin: 2px;
+            }
+            
+            QCalendarWidget QToolButton:hover {
+                background-color: #E0E0E0;
+            }
+            
+            QCalendarWidget QMenu {
+                background-color: white;
+                color: #212121;
+            }
+            
+            QCalendarWidget QSpinBox {
+                background-color: white;
+                color: #212121;
+                border: 1px solid #BDBDBD;
+                border-radius: 4px;
+            }
+            
+            QCalendarWidget QAbstractItemView {
+                background-color: white;
+                color: #212121;
+                selection-background-color: #2979FF;
+                selection-color: white;
+            }
+            
+            QCalendarWidget QAbstractItemView:enabled {
+                color: #212121;
+            }
+            
+            QCalendarWidget QAbstractItemView:disabled {
+                color: #9E9E9E;
+            }
+        """)
+
         date_col.addWidget(date_label)
         date_col.addWidget(self.date_edit)
         row1.addLayout(date_col)
@@ -50,7 +106,28 @@ class TransactionDetailsWidget(QWidget):
         self.total_edit = QDoubleSpinBox()
         self.total_edit.setMaximum(1000000)
         self.total_edit.setPrefix("€ ")
-        self.total_edit.setStyleSheet("QDoubleSpinBox { background: #fff; } QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 18px; height: 18px; margin: 0; padding: 0; } QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 14px; height: 14px; }")
+        self.total_edit.setStyleSheet("""
+            QDoubleSpinBox { 
+                background-color: white; 
+                color: #212121; 
+                border: 1px solid #BDBDBD;
+                border-radius: 4px;
+                padding: 2px;
+            } 
+            
+            QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { 
+                width: 18px; 
+                height: 18px; 
+                margin: 0; 
+                padding: 0; 
+                background-color: white;
+            }
+            
+            QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { 
+                width: 14px; 
+                height: 14px; 
+            }
+        """)
         total_col.addWidget(total_label)
         total_col.addWidget(self.total_edit)
         row1.addLayout(total_col)
@@ -65,7 +142,23 @@ class TransactionDetailsWidget(QWidget):
         payment_label.setStyleSheet("margin-bottom: 2px;")
         self.payment_type = QComboBox()
         self.payment_type.addItems(["Contanti", "Carta", "Bancomat", "Altro"])
-        self.payment_type.setStyleSheet("QComboBox, QComboBox QAbstractItemView { background: #fff; }")
+        self.payment_type.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                color: #212121;
+                border: 1px solid #BDBDBD;
+                border-radius: 4px;
+                padding: 2px;
+            }
+            
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #212121;
+                border: 1px solid #BDBDBD;
+                selection-background-color: #2979FF;
+                selection-color: white;
+            }
+        """)
         payment_col.addWidget(payment_label)
         payment_col.addWidget(self.payment_type)
         row2.addLayout(payment_col)
@@ -89,7 +182,23 @@ class TransactionDetailsWidget(QWidget):
         currency_label.setStyleSheet("margin-bottom: 2px;")
         self.currency_combo = QComboBox()
         self.currency_combo.addItems(["EUR", "USD", "GBP", "CHF", "JPY", "Altro"])
-        self.currency_combo.setStyleSheet("QComboBox, QComboBox QAbstractItemView { background: #fff; }")
+        self.currency_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                color: #212121;
+                border: 1px solid #BDBDBD;
+                border-radius: 4px;
+                padding: 2px;
+            }
+            
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #212121;
+                border: 1px solid #BDBDBD;
+                selection-background-color: #2979FF;
+                selection-color: white;
+            }
+        """)
         currency_col.addWidget(currency_label)
         currency_col.addWidget(self.currency_combo)
         row2.addLayout(currency_col)
@@ -100,7 +209,15 @@ class TransactionDetailsWidget(QWidget):
         desc_label.setStyleSheet("margin-top: 6px; margin-bottom: 2px;")
         self.description_edit = QTextEdit()
         self.description_edit.setFixedHeight(48)
-        self.description_edit.setStyleSheet("QTextEdit { background: #fff; padding: 6px 8px; border-radius: 5px; border: 1px solid #bbb; font-size: 13px; }")
+        self.description_edit.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                color: #212121;
+                border: 1px solid #BDBDBD;
+                border-radius: 4px;
+                padding: 2px;
+            }
+        """)
         layout.addWidget(desc_label)
         layout.addWidget(self.description_edit)
 

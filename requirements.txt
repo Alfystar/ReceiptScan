@@ -6,3 +6,5 @@ torchvision
 opencv-python
 numpy
 PyQt6
+qt_material
+qtpy

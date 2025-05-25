@@ -61,11 +61,25 @@ if __name__ == "__main__":
     # 3. Creazione dell'applicazione Qt
     app = QApplication(sys.argv)
 
+    # Impostare lo stile di default per l'applicazione (tema Material)
+    try:
+        # Proviamo a utilizzare il tema Material Design se disponibile
+        import qtpy
+        from qt_material import apply_stylesheet
+        apply_stylesheet(app, theme='light_blue.xml')
+        logging.info("Applicato stile Material Design")
+    except ImportError:
+        # Se il pacchetto qt_material non è disponibile, utilizziamo Fusion come fallback
+        app.setStyle("Fusion")
+        logging.info("Applicato stile Fusion (qt_material non disponibile)")
+
     # 4. Timer per la gestione dei segnali
     _ka_timer = keep_alive()
 
     # 5. Creazione e visualizzazione della finestra principale
     try:
+        # Creazione del controller - questo inizializzerà la GUI immediatamente,
+        # mentre il modello AI si caricherà in background
         controller = OcrAppController(args.dir)
         controller.view.show()  # Mostra la view del controller
     except Exception as e:
