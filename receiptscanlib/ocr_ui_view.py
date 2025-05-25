@@ -68,6 +68,7 @@ class OcrUiView(QMainWindow):
         analysis_container = QWidget()
         analysis_container.setObjectName("analysisContainer")
         analysis_layout = QVBoxLayout(analysis_container)
+        analysis_layout.setContentsMargins(10, 10, 10, 30)  # Aumentato il margine inferiore
 
         # Layout orizzontale per tutti i pannelli di analisi
         analysis_panels_layout = QHBoxLayout()
@@ -164,9 +165,14 @@ class OcrUiView(QMainWindow):
 
         analysis_panels_layout.addWidget(separator_container2)
 
+        # Contenitore per il pannello di destra con un layout separato per assicurare che il contenuto non venga coperto
+        right_panel_container = QWidget()
+        right_panel_container.setFixedWidth(column_width)
+        right_panel_container_layout = QVBoxLayout(right_panel_container)
+        right_panel_container_layout.setContentsMargins(0, 0, 0, 0)
+
         # Pannello destra: testo OCR e dettagli della transazione (invertiti come richiesto)
         transaction_panel = QWidget()
-        transaction_panel.setFixedWidth(column_width)  # Imposta larghezza fissa
         transaction_layout = QVBoxLayout(transaction_panel)
         transaction_layout.setContentsMargins(0, 5, 0, 0)  # Margini minimi
         transaction_layout.setSpacing(8)  # Spaziatura ridotta tra gli elementi
@@ -185,33 +191,36 @@ class OcrUiView(QMainWindow):
         # TextEdit per mostrare il testo OCR con più spazio
         self.ocr_text = QTextEdit()
         self.ocr_text.setReadOnly(True)
-        self.ocr_text.setMinimumHeight(350)  # Aumentiamo l'altezza minima
+        self.ocr_text.setMinimumHeight(220)  # Aumentiamo l'altezza minima
         transaction_layout.addWidget(self.ocr_text, 1)  # Proporzione 1 con stretching
-
-        # Aggiungiamo uno stretcher per spingere il TransactionDetailsWidget verso il basso
-        transaction_layout.addStretch(1)  # Corretto da 0.5 a 1 - addStretch accetta solo valori interi
 
         # Label per i dettagli della transazione
         details_label = QLabel("Dettagli Transazione:")
         details_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
         transaction_layout.addWidget(details_label)
 
-        # Widget per i dettagli della transazione
+        # Widget per i dettagli della transazione con altezza limitata
         self.transaction_details = TransactionDetailsWidget()
-        self.transaction_details.setMaximumHeight(200)  # Limitiamo l'altezza massima
-        transaction_layout.addWidget(self.transaction_details)  # Nessuna proporzione, usa l'altezza preferita
+        self.transaction_details.setMinimumHeight(150)
+        self.transaction_details.setMaximumHeight(160)  # Limitiamo l'altezza massima
+        transaction_layout.addWidget(self.transaction_details)
 
-        analysis_panels_layout.addWidget(transaction_panel)
+        # Aggiungiamo il pannello al contenitore con un margin bottom specifico
+        right_panel_container_layout.addWidget(transaction_panel, 1)
+
+        # Aggiungiamo uno spazio extra sotto il pannello di destra (sopra il pulsante)
+        right_panel_container_layout.addItem(QSpacerItem(20, 60, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
+
+        analysis_panels_layout.addWidget(right_panel_container)
 
         # Aggiungi i pannelli al container principale
-        analysis_layout.addLayout(analysis_panels_layout)
+        analysis_layout.addLayout(analysis_panels_layout, 1)
 
         # Pulsante per analizzare l'immagine corrente (dentro il container)
         self.analyze_button = QPushButton("Analizza Immagine Corrente")
         self.analyze_button.setMinimumHeight(40)
         self.analyze_button.clicked.connect(lambda: self.analyze_clicked.emit())
         analysis_layout.addWidget(self.analyze_button, 0, Qt.AlignmentFlag.AlignRight)
-        analysis_layout.setContentsMargins(10, 10, 10, 10)
 
         # Aggiungiamo il container all'interfaccia principale
         horizontal_layout.addWidget(analysis_container, 1)  # Proporzione 1 per il container di analisi
