@@ -104,6 +104,94 @@ def analyze_image_with_ocr(image_np_bgr):
             logger.error(f"Errore generico durante l'analisi OCR: {e}", exc_info=True)
             return f"Errore OCR (Generico): {str(e)}"
 
+# TODO: testare questa funzione con immagini di scontrini reali e commenti generati dal prompt:
+# vorrei provare a farlo con questo modello, senza usarne un altro, così da mantenere tutta la computazione in locale
+# le domande sono sempre le stesse e mi servirebbe una risposta JSON così da poterla parsare facilmente. Le domande sono:
+#
+#
+# 1. in che data è stato fatto lo scontrino
+# 2 .Quanto è la spesa totale
+# 3. è stato fatto in contanti o tramite pagamento elettronico
+# 4. In che valuta è tra (lista di valute)
+# In oltre, riceve oltre alla foto anche un commento umano scritto che da ulteriori informazioni su quello scontrino.
+#
+# L'output dovrebbe essere il testo letto e la risposta in formato json alle domande the ti ho appena scritto
+# con domanda all'llm in inglese e risposta in base alla lingua del commento/scontrino.
+# TODO: aggingiere che ad ogni nuova chiamata venga resettata la memoria del modello, così da evitare problemi di memoria
+
+def analyze_receipt_structured(image_np_bgr, comment=""):
+    """
+    Analizza uno scontrino e restituisce sia il testo completo che i dati strutturati in JSON.
+
+    Args:
+        image_np_bgr (numpy.ndarray): L'immagine dello scontrino in formato BGR
+        comment (str, optional): Commento aggiuntivo con informazioni sullo scontrino
+
+    Returns:
+        tuple: (testo_completo, json_risposta)
+    """
+    global model, processor, device
+    if model is None or processor is None:
+        logger.error("Modello OCR non inizializzato. Chiamare init_ocr_model() prima.")
+        return "Errore: Modello OCR non inizializzato.", "{}"
+
+    with ocr_lock:
+        try:
+            logger.info("Inizio analisi strutturata dello scontrino")
+
+            # Converti l'immagine da OpenCV BGR a PIL RGB
+            image_rgb = cv2.cvtColor(image_np_bgr, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(image_rgb)
+
+            # Prima estrai il testo completo
+            basic_prompt = "Transcribe all text from this receipt."
+            basic_inputs = processor(images=pil_image, text=basic_prompt, return_tensors="pt", format=True).to(device)
+
+            logger.info("Generazione testo completo dello scontrino...")
+            text_ids = model.generate(
+                **basic_inputs,
+                do_sample=False,
+                tokenizer=processor.tokenizer,
+                stop_strings="<|im_end|>",
+                max_new_tokens=512
+            )
+            full_text = \
+            processor.batch_decode(text_ids[:, basic_inputs["input_ids"].shape[1]:], skip_special_tokens=True)[
+                0].strip()
+
+            # Ora estrai le informazioni strutturate con un prompt specifico
+            json_prompt = f"""Analyze this receipt and extract the following information in JSON format:
+            Additional context: {comment}
+
+            Return ONLY a valid JSON with this structure:
+            {{
+              "date": "date of the receipt",
+              "total": "total amount",
+              "payment_method": "cash or electronic",
+              "currency": "EUR or USD or GBP or other currency"
+            }}
+            """
+
+            json_inputs = processor(images=pil_image, text=json_prompt, return_tensors="pt", format=True).to(device)
+
+            logger.info("Generazione risposta strutturata in JSON...")
+            json_ids = model.generate(
+                **json_inputs,
+                do_sample=False,
+                tokenizer=processor.tokenizer,
+                stop_strings="<|im_end|>",
+                max_new_tokens=256
+            )
+
+            json_text = \
+            processor.batch_decode(json_ids[:, json_inputs["input_ids"].shape[1]:], skip_special_tokens=True)[0].strip()
+
+            logger.info("Analisi strutturata completata")
+            return full_text, json_text
+
+        except Exception as e:
+            logger.error(f"Errore durante l'analisi strutturata: {e}", exc_info=True)
+            return f"Errore: {str(e)}", "{}"
 
 if __name__ == '__main__':
     # Piccolo test (eseguire solo se lo script è chiamato direttamente)
