@@ -37,6 +37,11 @@ class TransactionDetailsWidget(QWidget):
                 padding: 2px;
             }
             
+            QCalendarWidget {
+                min-width: 300px;
+                min-height: 200px;
+            }
+            
             QCalendarWidget QWidget {
                 background-color: white;
                 color: #212121;
