@@ -8,3 +8,7 @@ numpy
 PyQt6
 qt_material
 qtpy
+tiktoken
+verovio
+adapters
+peft

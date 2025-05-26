@@ -13,7 +13,7 @@ from PyQt6.QtCore import QThread, pyqtSignal, QObject, Qt
 from PyQt6.QtGui import QImage, QPixmap
 
 from .image_processor import warp_image
-from .ocr_analyzer import init_ocr_model, analyze_image_with_ocr
+from .ocr_analyzer import init_ocr_model, analyze_image_with_ocr, analyze_receipt_structured_llm, unload_ocr_model, init_llm_model, unload_llm_model
 from .ocr_ui_view import OcrUiView
 
 # Configurazione del logger per questo modulo
@@ -25,19 +25,22 @@ class OcrWorker(QThread):
 
     finished = pyqtSignal(str, int, str)  # fname, idx, ocr_result
 
-    def __init__(self, fname, idx, wrapped_img_cv):
+    def __init__(self, fname, idx, wrapped_img_cv, comment_user=""):
         super().__init__()
         self.fname = fname
         self.idx = idx
         self.wrapped_img_cv = wrapped_img_cv
+        self.comment_user = comment_user  # Commento dell'utente, se necessario
 
     def run(self):
         # Eseguo OCR in background
         logger.info(f"Avvio analisi OCR in background per {self.fname}...")
-        ocr_text_result = analyze_image_with_ocr(self.wrapped_img_cv)
+        # ocr_text_result = analyze_image_with_ocr(self.wrapped_img_cv)
+        ocr_text_result, ocr_summary_dict = analyze_receipt_structured_llm(self.wrapped_img_cv, self.comment_user)
         logger.info(f"Analisi OCR per {self.fname} completata in background.")
         # Emetto il segnale con i risultati
         self.finished.emit(self.fname, self.idx, ocr_text_result)
+        # TODO: Emettere anche ocr_summary_dict quando sarà implementato il supporto per i riepiloghi
 
 
 class ModelInitWorker(QThread):
@@ -48,7 +51,17 @@ class ModelInitWorker(QThread):
     def run(self):
         # Inizializza il modello OCR in background
         logger.info("Inizializzazione del modello OCR in background...")
-        success = init_ocr_model()
+        try:
+            logger.info("Check modelli OCR...")
+            init_ocr_model()
+            unload_ocr_model()
+            logger.info("Check modelli LLM...")
+            init_llm_model()
+            unload_llm_model()
+            success = True
+        except Exception as e:
+            logger.error(f"Errore durante l'inizializzazione del modello OCR: {e}")
+            success = False
         logger.info(f"Inizializzazione del modello OCR completata con risultato: {success}")
         # Emetti il segnale con il risultato
         self.finished.emit(success)
