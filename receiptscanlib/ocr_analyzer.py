@@ -48,21 +48,83 @@ def enough_gpu_memory(required_gb=3):
 
 def init_llm_model():
     global llm_tokenizer, llm_pipeline, llm_model
-    llm_tokenizer = transformers.AutoTokenizer.from_pretrained(LLM_MODEL_ID)
-    llm_tokenizer.pad_token_id = llm_tokenizer.eos_token_id
-    max_mem = {0: "4GiB", "cpu": "8GiB"}  # Adatta il valore a seconda della tua GPU
-    llm_model = transformers.AutoModelForCausalLM.from_pretrained(
-        LLM_MODEL_ID,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",  # Split automatico tra CPU e GPU
-        max_memory = max_mem
-    )
-    llm_pipeline = transformers.pipeline(
-        "text-generation",
-        model=llm_model,
-        tokenizer=llm_tokenizer,
-        max_new_tokens=1024
-    )
+    try:
+        # Test preliminare della GPU e configurazione del dispositivo
+        if torch.cuda.is_available():
+            try:
+                # Testiamo se possiamo accedere alla GPU senza errori
+                dummy_tensor = torch.zeros(1).cuda()
+                dummy_tensor = dummy_tensor * 2  # Operazione semplice per testare la GPU
+                del dummy_tensor  # Puliamo
+                torch.cuda.empty_cache()
+                device_map = "auto"  # Utilizziamo la divisione automatica tra CPU e GPU
+                logger.info("Utilizzo GPU per il modello LLM")
+            except Exception as e:
+                logger.warning(f"GPU disponibile ma ha generato un errore: {e}. Utilizzo CPU come fallback per LLM.")
+                device_map = "cpu"
+        else:
+            device_map = "cpu"
+            logger.info("GPU non disponibile, utilizzo CPU per il modello LLM")
+
+        # Configurazione per evitare problemi di clock e threading
+        torch.set_num_threads(1)  # Limita i thread per ridurre problemi di sincronizzazione
+
+        # Carica prima il tokenizer (meno intensivo in memoria)
+        llm_tokenizer = transformers.AutoTokenizer.from_pretrained(
+            LLM_MODEL_ID,
+            use_fast=True,  # Tokenizer veloce dove possibile
+            padding_side='left'  # Migliora la performance per text generation
+        )
+
+        # Configura il pad token correttamente
+        if llm_tokenizer.pad_token_id is None:
+            llm_tokenizer.pad_token_id = llm_tokenizer.eos_token_id
+
+        # Memoria configurata in modo dinamico in base al dispositivo
+        if device_map == "auto":
+            max_mem = {0: "3GiB", "cpu": "8GiB"}  # Valori cautelativi
+        else:
+            max_mem = None  # Non specificato quando si usa solo CPU
+
+        # Carica il modello con configurazioni ottimizzate
+        load_options = {
+            "device_map": device_map,
+            "low_cpu_mem_usage": True,
+            "max_memory": max_mem
+        }
+
+        # Aggiungiamo la precisione ridotta solo se usiamo la GPU
+        if device_map == "auto":
+            # Determinare il tipo di precisione supportato dalla GPU
+            if torch.cuda.is_bf16_supported():
+                load_options["torch_dtype"] = torch.bfloat16
+                logger.info("Utilizzo di bfloat16 per il modello LLM")
+            else:
+                load_options["torch_dtype"] = torch.float16
+                logger.info("Utilizzo di float16 per il modello LLM")
+
+        # Carica il modello con le opzioni configurate
+        llm_model = transformers.AutoModelForCausalLM.from_pretrained(
+            LLM_MODEL_ID,
+            **load_options
+        )
+
+        # Crea la pipeline con configurazioni di sicurezza
+        llm_pipeline = transformers.pipeline(
+            "text-generation",
+            model=llm_model,
+            tokenizer=llm_tokenizer,
+            max_new_tokens=1024,
+            do_sample=False,  # Genera output più deterministici
+            return_full_text=False,  # Per risparmiare memoria
+            pad_token_id=llm_tokenizer.pad_token_id
+        )
+
+        return True
+    except Exception as e:
+        logger.error(f"Errore durante l'inizializzazione del modello LLM: {e}", exc_info=True)
+        llm_tokenizer, llm_pipeline, llm_model = None, None, None
+        return False
 
 
 def unload_llm_model():
@@ -78,10 +140,48 @@ def unload_llm_model():
 
 def init_ocr_model():
     global ocr_model, ocr_processor, ocr_device
-    ocr_device = "cuda" if torch.cuda.is_available() else "cpu"
-    ocr_model = AutoModelForImageTextToText.from_pretrained(OCR_MODEL_NAME, trust_remote_code=True)
-    ocr_model.to(ocr_device)
-    ocr_processor = AutoProcessor.from_pretrained(OCR_MODEL_NAME, trust_remote_code=True, use_fast=True)
+    try:
+        # Impostiamo il dispositivo con un meccanismo di fallback più robusto
+        if torch.cuda.is_available():
+            try:
+                # Prima testiamo se possiamo accedere alla GPU senza errori
+                dummy_tensor = torch.zeros(1).cuda()
+                dummy_tensor = dummy_tensor * 2  # Semplice operazione per verificare che la GPU funzioni
+                del dummy_tensor  # Puliamo
+                torch.cuda.empty_cache()
+                ocr_device = "cuda"
+                logger.info("Utilizzo GPU per il modello OCR")
+            except Exception as e:
+                logger.warning(f"GPU disponibile ma ha generato un errore: {e}. Utilizzo CPU come fallback.")
+                ocr_device = "cpu"
+        else:
+            ocr_device = "cpu"
+            logger.info("GPU non disponibile, utilizzo CPU per il modello OCR")
+
+        # Configurazione per evitare problemi di clock e threading
+        torch.set_num_threads(1)  # Limitare i thread può aiutare con problemi di sincronizzazione
+
+        # Carica il processore prima del modello
+        ocr_processor = AutoProcessor.from_pretrained(OCR_MODEL_NAME, trust_remote_code=True, use_fast=True)
+
+        # Carichiamo il modello con configurazione migliorata
+        load_options = {
+            "trust_remote_code": True,
+            "low_cpu_mem_usage": True,  # Riduce l'utilizzo di memoria CPU durante il caricamento
+        }
+
+        # Aggiungiamo opzioni specifiche per la GPU se usata
+        if ocr_device == "cuda":
+            load_options["torch_dtype"] = torch.float16  # Utilizziamo la precisione ridotta per risparmiare memoria
+
+        ocr_model = AutoModelForImageTextToText.from_pretrained(OCR_MODEL_NAME, **load_options)
+        ocr_model.to(ocr_device)
+
+        return True
+    except Exception as e:
+        logger.error(f"Errore durante l'inizializzazione del modello OCR: {e}", exc_info=True)
+        ocr_model, ocr_processor, ocr_device = None, None, None
+        return False
 
 
 def unload_ocr_model():
@@ -196,7 +296,7 @@ No other text or explanation. Be sure the response start with a single opening c
             unload_llm_model()
     llm_result = llm_output[0]
     if isinstance(llm_result, dict) and "generated_text" in llm_result:
-        llm_text = llm_result["generated_text"][-1]['content'].strip()
+        llm_text = llm_result["generated_text"].strip()
     else:
         llm_text = str(llm_result).strip()
 

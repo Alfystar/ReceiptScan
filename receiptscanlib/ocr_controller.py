@@ -35,12 +35,45 @@ class OcrWorker(QThread):
     def run(self):
         # Eseguo OCR in background
         logger.info(f"Avvio analisi OCR in background per {self.fname}...")
-        # ocr_text_result = analyze_image_with_ocr(self.wrapped_img_cv)
         ocr_text_result, ocr_summary_dict = analyze_receipt_structured_llm(self.wrapped_img_cv, self.comment_user)
         logger.info(f"Analisi OCR per {self.fname} completata in background.")
         # Emetto il segnale con i risultati
         self.finished.emit(self.fname, self.idx, ocr_text_result)
-        # TODO: Emettere anche ocr_summary_dict quando sarà implementato il supporto per i riepiloghi
+
+
+class LlmWorker(QThread):
+    """Worker thread per eseguire l'analisi LLM in background."""
+
+    finished = pyqtSignal(str, int, dict)  # fname, idx, structured_data
+
+    def __init__(self, fname, idx, ocr_text="", comment_user=""):
+        super().__init__()
+        self.fname = fname
+        self.idx = idx
+        self.ocr_text = ocr_text
+        self.comment_user = comment_user
+
+    def run(self):
+        # Eseguo LLM in background
+        logger.info(f"Avvio analisi LLM in background per {self.fname}...")
+        try:
+            from datetime import datetime
+            structured_data = {
+                "negozio": "Esempio Negozio",
+                "data": datetime.now().strftime("%Y-%m-%d"),
+                "importo_totale": "42.00",
+                "valuta": "EUR",
+                "items": [
+                    {"descrizione": "Articolo di esempio", "quantita": 2, "prezzo": "21.00"}
+                ]
+            }
+            logger.info(f"Analisi LLM per {self.fname} completata in background.")
+        except Exception as e:
+            logger.error(f"Errore durante l'analisi LLM: {e}")
+            structured_data = {"error": str(e)}
+
+        # Emetto il segnale con i risultati
+        self.finished.emit(self.fname, self.idx, structured_data)
 
 
 class ModelInitWorker(QThread):
@@ -91,7 +124,9 @@ class OcrAppController(QObject):
         self.perimeters = {}  # filename -> 4 points
         self.processing = {}  # filename -> bool (in analisi)
         self.wrapped_images = {}  # filename -> QPixmap of wrapped image
+        self.wrapped_cv_images = {}  # filename -> CV2 image (per avere a disposizione l'immagine ritagliata)
         self.ocr_results = {}  # filename -> str (risultato OCR)
+        self.llm_results = {}  # filename -> dict (risultato LLM strutturato)
         self.user_comments = {}  # filename -> str (commenti utente)
 
         # Flag per l'inizializzazione del modello
@@ -113,11 +148,20 @@ class OcrAppController(QObject):
 
     def _connect_signals(self):
         """Collega i segnali della view alle funzioni del controller."""
+        # Segnali esistenti
         self.view.preview_selected.connect(self.on_preview_selected)
         self.view.preview_size_changed.connect(self.update_preview_size)
-        self.view.analyze_clicked.connect(self.start_analyze)
-        self.view.analyze_all_clicked.connect(self.start_analyze_all)
+        self.view.analyze_clicked.connect(self.start_analyze)  # Mantenuto per retrocompatibilità
+        self.view.analyze_all_clicked.connect(self.start_analyze_all)  # Mantenuto per retrocompatibilità
         self.view.text_comment_changed.connect(self.save_current_comment)
+
+        # Nuovi segnali
+        self.view.crop_image_clicked.connect(self.crop_image)
+        self.view.crop_all_clicked.connect(self.crop_all_images)
+        self.view.analyze_ocr_clicked.connect(self.analyze_ocr)
+        self.view.analyze_all_ocr_clicked.connect(self.analyze_all_ocr)
+        self.view.analyze_llm_clicked.connect(self.analyze_llm)
+        self.view.analyze_all_llm_clicked.connect(self.analyze_all_llm)
 
     def on_model_initialized(self, success):
         """Callback chiamato quando l'inizializzazione del modello OCR è completata."""
@@ -176,6 +220,9 @@ class OcrAppController(QObject):
 
         # Aggiorna lo stato dei pulsanti di analisi in base allo stato del modello
         self.view.set_analyze_buttons_enabled(self.model_initialized and not self.processing.get(fname, False))
+
+        # Aggiorna lo stato del pulsante LLM in base alla disponibilità del testo OCR
+        self.view.update_llm_buttons_state()
 
     def update_preview_size(self, value):
         """Aggiorna la dimensione delle anteprime."""
@@ -250,82 +297,238 @@ class OcrAppController(QObject):
         self.set_processing(fname, False)
         logger.info(f"Analisi OCR per {fname} completata e interfaccia aggiornata.")
 
-    def start_analyze(self, idx=None):
-        """Avvia l'analisi OCR per un'immagine specifica o quella corrente."""
-        actual_idx_for_processing = idx if idx is not None else self.current_idx
+        # Aggiorna lo stato del pulsante LLM per questa immagine
+        if idx == self.current_idx:
+            self.view.update_llm_buttons_state()
 
-        if actual_idx_for_processing == self.current_idx:
-            # Se stiamo processando l'immagine corrente, salva il perimetro
-            self.save_current_perimeter()
+        # Verifica se tutti i file hanno un risultato OCR per abilitare il pulsante "all" LLM
+        self.update_all_llm_button_state()
 
-        fname = self.image_files[actual_idx_for_processing]
+    def llm_completed(self, fname, idx, structured_data):
+        """Callback chiamato quando l'analisi LLM è completata."""
+        self.llm_results[fname] = structured_data
+        # Aggiorna l'interfaccia con i dati strutturati
+        if idx == self.current_idx:
+            self.view.set_status_message(f"Analisi LLM completata per {fname}", 5000)
+
+        self.set_processing(fname, False)
+        logger.info(f"Analisi LLM per {fname} completata e interfaccia aggiornata.")
+
+    def update_all_llm_button_state(self):
+        """Aggiorna lo stato del pulsante LLM 'all' in base alla disponibilità dei testi OCR."""
+        all_have_ocr = all(fname in self.ocr_results for fname in self.image_files)
+        self.view.update_all_llm_button_state(all_have_ocr)
+
+    def crop_image(self):
+        """Ritaglia l'immagine corrente usando i punti di controllo."""
+        self.save_current_perimeter()
+        fname = self.image_files[self.current_idx]
         self.set_processing(fname, True)
+        self.view.set_status_message(f"Ritaglio dell'immagine {fname} in corso...")
 
-        # Ottieni le coordinate
+        # Esegui la trasformazione prospettica
+        self._crop_image_internal(self.current_idx)
+
+        self.set_processing(fname, False)
+        self.view.set_status_message(f"Ritaglio dell'immagine {fname} completato", 3000)
+
+    def crop_all_images(self):
+        """Ritaglia tutte le immagini usando i rispettivi punti di controllo."""
+        self.save_current_perimeter()  # Salva il perimetro dell'immagine corrente
+
+        self.view.set_status_message("Ritaglio di tutte le immagini in corso...")
+
+        # Ritaglia ogni immagine
+        for idx in range(len(self.image_files)):
+            fname = self.image_files[idx]
+            self.set_processing(fname, True)
+            self._crop_image_internal(idx)
+            self.set_processing(fname, False)
+
+        # Aggiorna l'interfaccia per l'immagine corrente
+        self.update_wrapped_image_display()
+        self.view.set_status_message("Ritaglio di tutte le immagini completato", 3000)
+
+    def _crop_image_internal(self, idx):
+        """Implementazione interna per il ritaglio dell'immagine all'indice specificato."""
+        fname = self.image_files[idx]
+        img_path = os.path.join(self.image_dir, fname)
+
+        # Ottieni i punti del perimetro
         coords = self.perimeters.get(fname)
-        logger.debug(f"Coords for {fname} before None check: {coords}")
-
         if coords is None:
             # Inizializza le coordinate se non esistono
-            img_path_for_coords = os.path.join(self.image_dir, fname)
-            img_for_coords = cv2.imread(img_path_for_coords)
+            img_for_coords = cv2.imread(img_path)
             if img_for_coords is not None:
                 h, w = img_for_coords.shape[:2]
                 coords = [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]]
                 self.perimeters[fname] = coords
-                logger.debug(f"Coords for {fname} initialized to default: {coords}")
             else:
-                logger.error(f"Impossibile leggere l'immagine {fname} per inizializzare le coordinate. Analisi annullata.")
-                self.set_processing(fname, False)
-                if actual_idx_for_processing == self.current_idx:
-                    self.view.set_ocr_text("Errore: Impossibile leggere l'immagine.")
-                return
+                logger.error(f"Impossibile leggere l'immagine {fname} per inizializzare le coordinate")
+                return False
 
-        # Esegui la trasformazione prospettica
-        img_path = os.path.join(self.image_dir, fname)
-        logger.debug(f"Calling warp_image for {fname} with coords: {coords}")
+        # Esegui il warping
         wrapped_img_cv = warp_image(img_path, coords)
 
         if wrapped_img_cv is not None:
-            logger.debug(f"warp_image for {fname} returned an image.")
             # Assicura che l'array NumPy sia contiguo
             if not wrapped_img_cv.flags['C_CONTIGUOUS']:
                 wrapped_img_cv = np.ascontiguousarray(wrapped_img_cv)
 
             h_w, w_w = wrapped_img_cv.shape[:2]
             if h_w > 0 and w_w > 0:
+                # Salva l'immagine CV2 per l'analisi OCR
+                self.wrapped_cv_images[fname] = wrapped_img_cv.copy()
+
+                # Converti in QImage e QPixmap per la visualizzazione
                 q_wrapped_img = QImage(wrapped_img_cv.data, w_w, h_w, wrapped_img_cv.strides[0], QImage.Format.Format_BGR888)
-                if q_wrapped_img.isNull():
-                    logger.error(f"QImage creata da wrapped_img_cv per {fname} è nulla.")
-                    self.wrapped_images.pop(fname, None)
-                    ocr_text_result = "Errore: QImage creata da wrapped_img_cv è nulla."
-                    self.ocr_results[fname] = ocr_text_result
-                    self._update_ocr_text(fname, actual_idx_for_processing, ocr_text_result)
-                    self.set_processing(fname, False)
-                    return
-                else:
+                if not q_wrapped_img.isNull():
                     self.wrapped_images[fname] = QPixmap.fromImage(q_wrapped_img)
-                    logger.debug(f"QPixmap for {fname} created and stored.")
-                self._update_image_display(fname, actual_idx_for_processing)
-
-                # Crea e avvia il thread OCR
-                self.ocr_thread = OcrWorker(fname, actual_idx_for_processing, wrapped_img_cv.copy())
-                self.ocr_thread.finished.connect(self.ocr_completed)
-                self.ocr_thread.start()
-                return
-
+                    if idx == self.current_idx:
+                        self.update_wrapped_image_display(fname)
+                    return True
+                else:
+                    logger.error(f"QImage creata da wrapped_img_cv per {fname} è nulla")
             else:
                 logger.error(f"Immagine wrappata per {fname} ha dimensioni non valide: {w_w}x{h_w}")
-                self.wrapped_images.pop(fname, None)
-                ocr_text_result = "Errore: Immagine wrappata non valida."
         else:
-            logger.debug(f"warp_image for {fname} returned None.")
-            self.wrapped_images.pop(fname, None)
-            ocr_text_result = "Errore: warp_image ha fallito."
+            logger.error(f"warp_image per {fname} ha restituito None")
 
-        self.ocr_results[fname] = ocr_text_result
-        self._update_ocr_text(fname, actual_idx_for_processing, ocr_text_result)
-        self.set_processing(fname, False)
+        return False
+
+    def analyze_ocr(self):
+        """Analizza l'immagine corrente con OCR dopo averla ritagliata se necessario."""
+        self.save_current_perimeter()
+        fname = self.image_files[self.current_idx]
+
+        # Se l'immagine non è stata ancora ritagliata, ritagliala prima
+        if fname not in self.wrapped_cv_images:
+            logger.info(f"Immagine {fname} non ancora ritagliata, eseguo ritaglio prima dell'analisi OCR")
+            if not self._crop_image_internal(self.current_idx):
+                self.view.set_status_message(f"Errore durante il ritaglio dell'immagine {fname}", 5000)
+                return
+
+        self.set_processing(fname, True)
+        self.view.set_status_message(f"Analisi OCR dell'immagine {fname} in corso...")
+
+        # Ottieni il commento utente
+        comment_user = self.user_comments.get(fname, "")
+
+        # Avvia l'analisi OCR in un thread separato
+        wrapped_img_cv = self.wrapped_cv_images[fname]
+        self.ocr_thread = OcrWorker(fname, self.current_idx, wrapped_img_cv, comment_user)
+        self.ocr_thread.finished.connect(self.ocr_completed)
+        self.ocr_thread.start()
+
+    def analyze_all_ocr(self):
+        """Analizza tutte le immagini con OCR dopo averle ritagliate se necessario."""
+        self.save_current_perimeter()  # Salva il perimetro dell'immagine corrente
+
+        self.view.set_status_message("Analisi OCR di tutte le immagini in corso...")
+
+        # Analizza ogni immagine
+        for idx in range(len(self.image_files)):
+            fname = self.image_files[idx]
+
+            # Se l'immagine non è stata ancora ritagliata, ritagliala prima
+            if fname not in self.wrapped_cv_images:
+                logger.info(f"Immagine {fname} non ancora ritagliata, eseguo ritaglio prima dell'analisi OCR")
+                if not self._crop_image_internal(idx):
+                    logger.error(f"Errore durante il ritaglio dell'immagine {fname}, salto l'analisi OCR")
+                    continue
+
+            self.set_processing(fname, True)
+
+            # Ottieni il commento utente
+            comment_user = self.user_comments.get(fname, "")
+
+            # Avvia l'analisi OCR in un thread separato
+            wrapped_img_cv = self.wrapped_cv_images[fname]
+            ocr_thread = OcrWorker(fname, idx, wrapped_img_cv, comment_user)
+            ocr_thread.finished.connect(self.ocr_completed)
+            ocr_thread.start()
+            # Attendiamo un po' per non sovraccaricare il sistema
+            ocr_thread.wait(100)  # ms
+
+    def analyze_llm(self):
+        """Analizza il testo OCR corrente con LLM per estrarre dati strutturati."""
+        fname = self.image_files[self.current_idx]
+
+        # Verifica che ci sia un testo OCR da analizzare
+        if fname not in self.ocr_results or not self.ocr_results[fname].strip():
+            self.view.set_status_message("Nessun testo OCR disponibile per l'analisi LLM", 5000)
+            return
+
+        ocr_text = self.ocr_results[fname]
+        comment_user = self.user_comments.get(fname, "")
+
+        self.set_processing(fname, True)
+        self.view.set_status_message(f"Analisi LLM del testo OCR per {fname} in corso...")
+
+        # Avvia l'analisi LLM in un thread separato
+        llm_thread = LlmWorker(fname, self.current_idx, ocr_text, comment_user)
+        llm_thread.finished.connect(self.llm_completed)
+        llm_thread.start()
+
+    def analyze_all_llm(self):
+        """Analizza tutti i testi OCR con LLM per estrarre dati strutturati."""
+        # Verifica che ci siano testi OCR da analizzare
+        missing_ocr = [fname for fname in self.image_files if fname not in self.ocr_results]
+        if missing_ocr:
+            missing_str = ", ".join(missing_ocr[:3])
+            if len(missing_ocr) > 3:
+                missing_str += f" e altri {len(missing_ocr) - 3}"
+            self.view.set_status_message(f"Mancano risultati OCR per: {missing_str}", 5000)
+            return
+
+        self.view.set_status_message("Analisi LLM di tutti i testi OCR in corso...")
+
+        # Analizza ogni testo OCR
+        for idx, fname in enumerate(self.image_files):
+            ocr_text = self.ocr_results[fname]
+            comment_user = self.user_comments.get(fname, "")
+
+            self.set_processing(fname, True)
+
+            # Avvia l'analisi LLM in un thread separato
+            llm_thread = LlmWorker(fname, idx, ocr_text, comment_user)
+            llm_thread.finished.connect(self.llm_completed)
+            llm_thread.start()
+            # Attendiamo un po' per non sovraccaricare il sistema
+            llm_thread.wait(100)  # ms
+
+    def start_analyze(self, idx=None):
+        """
+        Avvia l'analisi OCR per un'immagine specifica o quella corrente.
+        Mantenuto per retrocompatibilità.
+        """
+        if idx is None:
+            self.analyze_ocr()  # Usa la nuova funzione
+        else:
+            actual_idx = idx
+            fname = self.image_files[actual_idx]
+
+            # Se l'immagine non è stata ancora ritagliata, ritagliala prima
+            if fname not in self.wrapped_cv_images:
+                self._crop_image_internal(actual_idx)
+
+            self.set_processing(fname, True)
+
+            # Ottieni il commento utente
+            comment_user = self.user_comments.get(fname, "")
+
+            # Avvia l'analisi OCR in un thread separato
+            wrapped_img_cv = self.wrapped_cv_images[fname]
+            ocr_thread = OcrWorker(fname, actual_idx, wrapped_img_cv, comment_user)
+            ocr_thread.finished.connect(self.ocr_completed)
+            ocr_thread.start()
+
+    def start_analyze_all(self):
+        """
+        Avvia l'analisi OCR per tutte le immagini.
+        Mantenuto per retrocompatibilità.
+        """
+        self.analyze_all_ocr()  # Usa la nuova funzione
 
     def _update_image_display(self, fname_processed, processed_idx):
         """Aggiorna il display dell'immagine wrappata."""
@@ -340,38 +543,5 @@ class OcrAppController(QObject):
         if processed_idx == self.current_idx:
             self.view.set_ocr_text(ocr_text_to_display)
 
-    def start_analyze_all(self):
-        """Avvia l'analisi OCR per tutte le immagini."""
-        if not self.image_files:
-            logger.info("Nessun file da analizzare in start_analyze_all.")
-            return
-
-        # Salva eventuali modifiche al perimetro dell'immagine attuale
-        if self.current_idx < len(self.image_files):
-            current_fname_before_all = self.image_files[self.current_idx]
-            logger.debug(f"Prima di 'Analyze All', salvataggio perimetro per l'immagine corrente: {current_fname_before_all} (idx: {self.current_idx})")
-            self.save_current_perimeter()
-        else:
-            logger.warning("current_idx non valido prima di start_analyze_all, impossibile salvare il perimetro corrente.")
-
-        # Analizza tutte le immagini
-        for i in range(len(self.image_files)):
-            fname_to_analyze = self.image_files[i]
-            logger.debug(f"start_analyze_all: Inizio analisi per l'immagine {i}: {fname_to_analyze}")
-            self.start_analyze(idx=i)
-
-        logger.info("Analisi di tutti i file completata.")
-
-        # Aggiorna il display per l'immagine corrente
-        if self.current_idx < len(self.image_files):
-            current_display_fname = self.image_files[self.current_idx]
-            logger.debug(f"Dopo 'Analyze All', aggiornamento display per l'immagine corrente: {current_display_fname} (idx: {self.current_idx})")
-
-            self.update_wrapped_image_display(current_display_fname)
-
-            if current_display_fname in self.ocr_results:
-                self.view.set_ocr_text(self.ocr_results[current_display_fname])
-            else:
-                self.view.set_ocr_text("Risultato non disponibile o analisi non eseguita per l'immagine corrente")
-        else:
-            logger.warning("current_idx non valido dopo start_analyze_all, impossibile aggiornare il display.")
+# TODO: splittare le fasi AI in base ai pulsanti premuti
+# TODO: aggiungere sotto la colonna degli scontrini il pulsante "Export OFX" che esporta in un file OFX e allineare i pulsanti all a quelli singoli

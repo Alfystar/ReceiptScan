@@ -33,8 +33,18 @@ class OcrUiView(QMainWindow):
     # Segnali per collegare la View al Controller
     preview_selected = pyqtSignal(int)
     preview_size_changed = pyqtSignal(int)
-    analyze_clicked = pyqtSignal()
-    analyze_all_clicked = pyqtSignal()
+
+    # Nuovi segnali per i pulsanti di analisi
+    crop_image_clicked = pyqtSignal()
+    crop_all_clicked = pyqtSignal()
+    analyze_ocr_clicked = pyqtSignal()
+    analyze_all_ocr_clicked = pyqtSignal()
+    analyze_llm_clicked = pyqtSignal()
+    analyze_all_llm_clicked = pyqtSignal()
+
+    # Segnali esistenti
+    analyze_clicked = pyqtSignal()  # Mantenuto per retrocompatibilità
+    analyze_all_clicked = pyqtSignal()  # Mantenuto per retrocompatibilità
     text_comment_changed = pyqtSignal(str)
 
     def __init__(self):
@@ -98,6 +108,12 @@ class OcrUiView(QMainWindow):
         self.img_label.setMinimumHeight(550)  # Aumenta l'altezza minima
         orig_image_layout.addWidget(self.img_label, 1)  # Stretching verticale massimo
 
+        # Aggiungiamo il pulsante per ritagliare l'immagine corrente
+        self.crop_button = QPushButton("Ritaglia Immagine")
+        self.crop_button.setMinimumHeight(35)
+        self.crop_button.clicked.connect(lambda: self.crop_image_clicked.emit())
+        orig_image_layout.addWidget(self.crop_button)
+
         analysis_panels_layout.addWidget(orig_image_panel)  # Rimuovi la proporzione
 
         # Linea verticale tra i pannelli con margini
@@ -150,6 +166,12 @@ class OcrUiView(QMainWindow):
         self.comment_text.setMaximumHeight(150)  # Limita l'altezza massima
         wrapped_image_layout.addWidget(self.comment_text, 1)  # Proporzione 1 per il commento (25%)
 
+        # Aggiungiamo il pulsante per l'analisi OCR dell'immagine corrente
+        self.analyze_ocr_button = QPushButton("Analizza Immagine con OCR")
+        self.analyze_ocr_button.setMinimumHeight(35)
+        self.analyze_ocr_button.clicked.connect(lambda: self.analyze_ocr_clicked.emit())
+        wrapped_image_layout.addWidget(self.analyze_ocr_button)
+
         analysis_panels_layout.addWidget(wrapped_image_panel)
 
         # Linea verticale tra i pannelli con margini
@@ -198,32 +220,67 @@ class OcrUiView(QMainWindow):
         self.transaction_details = TransactionDetailsWidget()
         transaction_layout.addWidget(self.transaction_details)
 
+        # Aggiungiamo il pulsante per l'analisi LLM dell'immagine corrente
+        self.analyze_llm_button = QPushButton("Usa i dati per compilare la transazione con LLM")
+        self.analyze_llm_button.setMinimumHeight(35)
+        self.analyze_llm_button.setEnabled(False)  # Disabilitato di default
+        self.analyze_llm_button.clicked.connect(lambda: self.analyze_llm_clicked.emit())
+        transaction_layout.addWidget(self.analyze_llm_button)
+
         # Aggiungiamo il pannello al contenitore con un margin bottom specifico
         right_panel_container_layout.addWidget(transaction_panel, 1)
-
-        # Aggiungiamo uno spazio extra sotto il pannello di destra (sopra il pulsante)
-        # right_panel_container_layout.addItem(QSpacerItem(20, 60, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
 
         analysis_panels_layout.addWidget(right_panel_container)
 
         # Aggiungi i pannelli al container principale
         analysis_layout.addLayout(analysis_panels_layout, 1)
 
-        # Pulsante per analizzare l'immagine corrente (dentro il container)
+        # Pulsante per analizzare l'immagine corrente (Pulsante mantenuto per retrocompatibilità)
         self.analyze_button = QPushButton("Analizza Immagine Corrente")
         self.analyze_button.setMinimumHeight(40)
         self.analyze_button.clicked.connect(lambda: self.analyze_clicked.emit())
+        self.analyze_button.setVisible(False)  # Nascosto perché sostituito dai nuovi pulsanti
         analysis_layout.addWidget(self.analyze_button, 0, Qt.AlignmentFlag.AlignRight)
 
         # Aggiungiamo il container all'interfaccia principale
         horizontal_layout.addWidget(analysis_container, 1)  # Proporzione 1 per il container di analisi
         main_layout.addLayout(horizontal_layout, 1)  # Il layout orizzontale prende la maggior parte dello spazio
 
-        # Pulsante per analizzare tutte le immagini (fuori dal container, sotto tutto)
+        # Layout per i pulsanti "all" (sotto il contenitore principale)
+        all_buttons_layout = QHBoxLayout()
+        all_buttons_layout.setSpacing(10)
+
+        # Pulsante per ritagliare tutte le immagini
+        self.crop_all_button = QPushButton("Ritaglia tutte le immagini")
+        self.crop_all_button.setMinimumHeight(40)
+        self.crop_all_button.setMinimumWidth(250)
+        self.crop_all_button.clicked.connect(lambda: self.crop_all_clicked.emit())
+        all_buttons_layout.addWidget(self.crop_all_button)
+
+        # Pulsante per analizzare tutte le immagini con OCR
+        self.analyze_all_ocr_button = QPushButton("Analizza tutte le immagini con OCR")
+        self.analyze_all_ocr_button.setMinimumHeight(40)
+        self.analyze_all_ocr_button.setMinimumWidth(250)
+        self.analyze_all_ocr_button.clicked.connect(lambda: self.analyze_all_ocr_clicked.emit())
+        all_buttons_layout.addWidget(self.analyze_all_ocr_button)
+
+        # Pulsante per compilare tutte le transazioni con LLM
+        self.analyze_all_llm_button = QPushButton("Compila tutte le transazioni con LLM")
+        self.analyze_all_llm_button.setMinimumHeight(40)
+        self.analyze_all_llm_button.setMinimumWidth(250)
+        self.analyze_all_llm_button.setEnabled(False)  # Disabilitato di default
+        self.analyze_all_llm_button.clicked.connect(lambda: self.analyze_all_llm_clicked.emit())
+        all_buttons_layout.addWidget(self.analyze_all_llm_button)
+
+        # Pulsante per analizzare tutte le immagini (nascosto ma mantenuto per retrocompatibilità)
         self.analyze_all_button = QPushButton("Analizza Tutte le Immagini")
         self.analyze_all_button.setMinimumHeight(40)
         self.analyze_all_button.setMinimumWidth(300)
         self.analyze_all_button.clicked.connect(lambda: self.analyze_all_clicked.emit())
+        self.analyze_all_button.setVisible(False)  # Nascosto perché sostituito dai nuovi pulsanti
+
+        # Aggiunta layout pulsanti "all" al layout principale
+        main_layout.addLayout(all_buttons_layout)
         main_layout.addWidget(self.analyze_all_button, 0, Qt.AlignmentFlag.AlignRight)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
@@ -340,12 +397,13 @@ class OcrUiView(QMainWindow):
 
     def set_ocr_text(self, text):
         """
-        Imposta il testo OCR.
+        Imposta il testo OCR e aggiorna lo stato del pulsante LLM.
 
         Args:
             text: Testo OCR da visualizzare
         """
         self.ocr_text.setPlainText(text)
+        self.update_llm_buttons_state()
 
     def set_comment_text(self, text):
         """
@@ -360,6 +418,15 @@ class OcrUiView(QMainWindow):
         """Restituisce i punti di controllo correnti."""
         return self.img_label.get_points()
 
+    def update_llm_buttons_state(self):
+        """Aggiorna lo stato dei pulsanti LLM in base al contenuto del testo OCR."""
+        has_ocr_text = bool(self.ocr_text.toPlainText().strip())
+        self.analyze_llm_button.setEnabled(has_ocr_text)
+
+    def update_all_llm_button_state(self, all_have_ocr_text):
+        """Aggiorna lo stato del pulsante LLM 'all' in base alla disponibilità di tutti i testi OCR."""
+        self.analyze_all_llm_button.setEnabled(all_have_ocr_text)
+
     def set_analyze_buttons_enabled(self, enabled):
         """
         Imposta lo stato di abilitazione dei pulsanti di analisi.
@@ -367,8 +434,22 @@ class OcrUiView(QMainWindow):
         Args:
             enabled: Se True, i pulsanti saranno abilitati, altrimenti disabilitati
         """
+        # Pulsanti originali (retrocompatibilità)
         self.analyze_button.setEnabled(enabled)
         self.analyze_all_button.setEnabled(enabled)
+
+        # Nuovi pulsanti
+        self.crop_button.setEnabled(enabled)
+        self.crop_all_button.setEnabled(enabled)
+        self.analyze_ocr_button.setEnabled(enabled)
+        self.analyze_all_ocr_button.setEnabled(enabled)
+
+        # I pulsanti LLM sono gestiti separatamente in base al contenuto OCR
+        if not enabled:
+            self.analyze_llm_button.setEnabled(False)
+            self.analyze_all_llm_button.setEnabled(False)
+        else:
+            self.update_llm_buttons_state()
 
     def set_status_message(self, message, timeout=0):
         """
@@ -439,3 +520,4 @@ class OcrUiView(QMainWindow):
                 border: 1px solid #DFE1E5;
             }
         """)
+
