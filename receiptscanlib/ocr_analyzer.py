@@ -18,7 +18,7 @@ from peft import PeftModel  # Aggiungi questo import all'inizio del file
 OCR_MODEL_NAME = "stepfun-ai/GOT-OCR-2.0-hf"
 OCR_ADAPTER_NAME = "Effectz-AI/GOT-OCR2_0_Invoice_MD"  # Se hai un adapter specifico, altrimenti puoi omettere questa riga
 
-LLM_MODEL_ID = "chuanli11/Llama-3.2-3B-Instruct-uncensored"
+LLM_MODEL_ID = "chuanli11/Llama-3.2-3B-Instruct-uncensored" # "nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1"
 
 gpu_lock = threading.RLock()  # Lock per la GPU, se necessario
 # ocr_lock = threading.RLock()
@@ -50,10 +50,12 @@ def init_llm_model():
     global llm_tokenizer, llm_pipeline, llm_model
     llm_tokenizer = transformers.AutoTokenizer.from_pretrained(LLM_MODEL_ID)
     llm_tokenizer.pad_token_id = llm_tokenizer.eos_token_id
+    max_mem = {0: "4GiB", "cpu": "8GiB"}  # Adatta il valore a seconda della tua GPU
     llm_model = transformers.AutoModelForCausalLM.from_pretrained(
         LLM_MODEL_ID,
         torch_dtype=torch.bfloat16,
-        device_map="auto"  # Split automatico tra CPU e GPU
+        device_map="auto",  # Split automatico tra CPU e GPU
+        max_memory = max_mem
     )
     llm_pipeline = transformers.pipeline(
         "text-generation",
@@ -66,7 +68,7 @@ def init_llm_model():
 def unload_llm_model():
     global llm_tokenizer, llm_pipeline, llm_model
     if llm_model is None or llm_tokenizer is None or llm_pipeline is None:
-        raise RuntimeError("Il modello LLM non è caricato, impossibile eseguire unload.")
+        logger.warning("Il modello LLM non è caricato, unload non necessario.")
     del llm_pipeline, llm_tokenizer, llm_model
     llm_pipeline = None
     llm_tokenizer = None
@@ -85,59 +87,12 @@ def init_ocr_model():
 def unload_ocr_model():
     global ocr_model, ocr_processor, ocr_device
     if ocr_model is None or ocr_processor is None:
-        raise RuntimeError("Il modello OCR non è caricato, impossibile eseguire unload.")
+        logger.warning("Il modello OCR non è caricato, unload non necessario.")
     del ocr_model, ocr_processor
     ocr_model = None
     ocr_processor = None
     ocr_device = None
     torch.cuda.empty_cache()
-
-
-# def init_ocr_model():
-#     global model, processor, device, llm_tokenizer, llm_pipeline
-#     try:
-#         logger.info(f"Inizializzazione del modello OCR ({OCR_MODEL_NAME})...")
-#         llm_device = "cuda" if torch.cuda.is_available() else "cpu"
-#         logger.info(f"Utilizzo del device per LLM: {llm_device}")
-#
-#         # LLM su GPU
-#         llm_tokenizer = transformers.AutoTokenizer.from_pretrained(LLM_MODEL_ID)
-#         llm_tokenizer.pad_token_id = llm_tokenizer.eos_token_id
-#         llm_pipeline = transformers.pipeline(
-#             "text-generation",
-#             model=LLM_MODEL_ID,
-#             tokenizer=llm_tokenizer,
-#             max_new_tokens=512,
-#             torch_dtype=torch.bfloat16,
-#             device_map=llm_device
-#         )
-#         logger.info(f"Modello LLM '{LLM_MODEL_ID}' inizializzato con successo.")
-#
-#         ocr_device = "cuda" if enough_gpu_memory(3) else "cpu"  # es: 3GB liberi per OCR
-#         logger.info(f"Utilizzo del device per OCR: {ocr_device}")
-#         try:
-#             model = AutoModelForImageTextToText.from_pretrained(OCR_MODEL_NAME, trust_remote_code=True)
-#             model.to(ocr_device)
-#             device = ocr_device
-#         except RuntimeError as e:
-#             if "CUDA out of memory" in str(e):
-#                 logger.warning("Memoria GPU insufficiente, carico il modello OCR su CPU.")
-#                 model = AutoModelForImageTextToText.from_pretrained(OCR_MODEL_NAME, trust_remote_code=True)
-#                 model.to("cpu")
-#                 device = "cpu"
-#             else:
-#                 raise
-#         processor = AutoProcessor.from_pretrained(OCR_MODEL_NAME, trust_remote_code=True, use_fast=True)
-#
-#         logger.info(f"Modello OCR '{OCR_MODEL_NAME}' inizializzato con successo.")
-#         return True
-#     except Exception as e:
-#         logger.error(f"Errore durante l'inizializzazione del modello LLM e OCR: {e}")
-#         model = None
-#         processor = None
-#         llm_tokenizer = None
-#         llm_pipeline = None
-#         return False
 
 def analyze_image_with_ocr(image_np_bgr) -> str:
     """
@@ -207,19 +162,22 @@ def analyze_receipt_structured_llm(image_np_bgr, comment="", thinking="off"):
     # 2. Prepara il prompt per il LLM
     comment = comment.strip() if comment else "No additional comment provided."
     system_prompt = f"detailed thinking {thinking}"
+    #  { "date": "date of the receipt", "total": "total amount", "payment_method": "cash or electronic", "currency": "EUR or USD or GBP or other currency" }
     user_prompt = f"""Following text is an OCR of a receipt:
 
 {full_text}
 
 And this is additional context provided by the user: {comment}
 
-Extract the following information and return it text list, no other text or explanation:
-date: "date of the receipt",
-total: "total amount",
-payment_method: "cash or electronic",
-currency: "EUR or USD or GBP or other currency"
+Extract information necessary to fill this JSON and return ONLY IT, no other text or explanation:
+{{
+"date": "date of the receipt in format dd-mm-yyyy",
+"total": "total amount",
+"payment_method": "cash or electronic",
+"currency": "EUR or USD or GBP or other currency"
+}}
 """
-
+    logger.debug(f"Prompt per il LLM:\n{user_prompt}")
     # 3. Chiamata al LLM
     chat_input = [
         {"role": "system", "content": system_prompt},
@@ -236,7 +194,7 @@ currency: "EUR or USD or GBP or other currency"
             unload_llm_model()
     llm_result = llm_output[0]
     if isinstance(llm_result, dict) and "generated_text" in llm_result:
-        llm_text = llm_result["generated_text"].strip()
+        llm_text = llm_result["generated_text"][-1]['content'].strip()
     else:
         llm_text = str(llm_result).strip()
 
@@ -246,6 +204,7 @@ currency: "EUR or USD or GBP or other currency"
         json_start = llm_text.find("{")
         json_text = llm_text[json_start:]
         receipt_info = json.loads(json_text)
+        logger.debug(f"JSON estratto dal modello LLM: {receipt_info}")
     except Exception as e:
         receipt_info = {"error": "Invalid JSON", "raw_text": llm_text}
 
