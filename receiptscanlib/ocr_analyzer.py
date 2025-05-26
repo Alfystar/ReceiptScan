@@ -61,7 +61,7 @@ def init_llm_model():
         "text-generation",
         model=llm_model,
         tokenizer=llm_tokenizer,
-        max_new_tokens=512
+        max_new_tokens=1024
     )
 
 
@@ -169,13 +169,15 @@ def analyze_receipt_structured_llm(image_np_bgr, comment="", thinking="off"):
 
 And this is additional context provided by the user: {comment}
 
-Extract information necessary to fill this JSON and return ONLY IT, no other text or explanation:
+Extract information necessary to fill this JSON and return ONLY it with a json valid text that contains the following fields:
 {{
 "date": "date of the receipt in format dd-mm-yyyy",
 "total": "total amount",
 "payment_method": "cash or electronic",
 "currency": "EUR or USD or GBP or other currency"
 }}
+
+No other text or explanation. Be sure the response start with a single opening curly brace '{{' and ends with a single closing curly brace '}}'.
 """
     logger.debug(f"Prompt per il LLM:\n{user_prompt}")
     # 3. Chiamata al LLM
@@ -202,11 +204,17 @@ Extract information necessary to fill this JSON and return ONLY IT, no other tex
     try:
         # Cerca la prima parentesi graffa per estrarre solo il JSON
         json_start = llm_text.find("{")
-        json_text = llm_text[json_start:]
+        json_end = llm_text.rfind("}") + 1
+        if json_end == 0:
+            # Nessuna graffa chiusa trovata, aggiungila
+            json_text = llm_text[json_start:] + "}"
+        else:
+            json_text = llm_text[json_start:json_end]
         receipt_info = json.loads(json_text)
         logger.debug(f"JSON estratto dal modello LLM: {receipt_info}")
     except Exception as e:
         receipt_info = {"error": "Invalid JSON", "raw_text": llm_text}
+        logger.error(f"Errore durante il parsing del JSON estratto dal modello LLM: {e}, {receipt_info}", exc_info=True)
 
     return full_text, receipt_info
 
